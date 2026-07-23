@@ -20,7 +20,7 @@ Goal:
 
 Expected PRs:
 
-- [ ] Add README, project blueprint, roadmap, architecture, decisions log, development cycle, and agent instructions.
+- [x] Add README, project blueprint, roadmap, architecture, decisions log, development cycle, and agent instructions. (#1)
 - [ ] Add repository metadata baseline, including `.gitignore`, license decision, and contribution expectations.
 - [ ] Choose and document the first implementation PR order.
 
