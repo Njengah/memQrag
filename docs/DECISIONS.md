@@ -122,3 +122,45 @@ Consequences:
 - Contributors and users can freely use, modify, and redistribute memQrag with minimal friction.
 - No copyleft obligations are imposed on downstream forks or embedders.
 - Changing away from MIT later requires a new decision entry and explicit maintainer sign-off.
+
+### Decision: Phase 1 Implementation PR Order
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- Phase 1 (Foundation Scaffold) in `docs/PRODUCT_TIMELINE.md` lists five expected PRs, but the
+  tracker did not previously state the intended sequencing or the reasoning behind it.
+- Rails work requires the implementation order to be chosen and documented before scaffolding
+  starts, so PRs land in a dependency-safe, reviewable sequence instead of an ad hoc order.
+- Each Phase 1 PR must stay small enough to review in one pass, per the PR size guidance in
+  `docs/DEVELOPMENT_CYCLE.md`.
+
+Decision:
+
+- Implement Phase 1 in this fixed order:
+  1. Backend Python package scaffold under `memQrag/` with placeholder module boundaries only
+     (`ingestion`, `retrieval`, `memory`, `agent`, `api`). This establishes the package that every
+     later backend PR imports into, with no runtime behavior yet.
+  2. FastAPI health endpoint and backend test harness. This is the first runnable backend surface
+     and depends on the package scaffold from step 1 already existing.
+  3. React + Tailwind demo UI shell with no product workflow logic. This is an independent
+     frontend artifact that only needs to exist as a buildable shell; it does not depend on
+     backend behavior beyond knowing the health endpoint exists for later wiring.
+  4. Docker Compose wiring for API, UI, ChromaDB, and local volumes. This depends on both the API
+     (step 2) and UI (step 3) being real, buildable services before compose can wire them together.
+  5. Local check scripts or CI for backend tests, frontend build, linting, and formatting. This
+     depends on backend tests (step 2) and a frontend build target (step 3) already existing, so
+     the scripts have real checks to run instead of placeholders.
+- This order matches the existing bullet order already listed under Phase 1 in
+  `docs/PRODUCT_TIMELINE.md`; that order is now authoritative rather than incidental.
+
+Consequences:
+
+- Each PR builds on a working artifact from the previous PR, keeping diffs small and avoiding
+  speculative wiring to systems that do not exist yet.
+- Docker Compose (step 4) and CI (step 5) will fail fast and obviously if earlier scaffolding is
+  incomplete, since they depend directly on artifacts from steps 1 through 3.
+- Reordering Phase 1 PRs later requires a new decision entry superseding this one.
