@@ -32,11 +32,14 @@ Only perform these steps when the user asked for a PR workflow and the repositor
 ## Verification By Change Type
 
 - Documentation-only rails: inspect expected files and run `git status --short`.
-- Python backend: run formatter, lint, type checks when configured, and tests.
+- Python backend: run `ruff check .`, `ruff format --check .`, and `pytest` (or `./scripts/check.sh`
+  / `./scripts/check.ps1`, which run both backend and frontend checks together).
 - FastAPI endpoints: run API tests and inspect generated or documented response shapes.
 - Retrieval and memory logic: run deterministic unit tests with fixtures.
-- React UI: run frontend lint, tests when configured, and production build.
+- React UI: run `npm run lint` and `npm run build` in `ui/`, and tests when configured.
 - Docker Compose: run `docker compose up --build` or a documented smoke equivalent.
+- Any change: CI (`.github/workflows/ci.yml`) runs the backend and frontend checks above on every
+  push and pull request.
 
 ## Completion Evidence
 
