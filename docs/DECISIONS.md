@@ -197,3 +197,33 @@ Consequences:
 - Contributors run one standard command (`pip install -e ".[dev]"` then `pytest`) regardless of
   which backend module they are working on.
 - Switching build backend or package layout later requires a new decision entry.
+
+### Decision: Unprefixed `/health` Infrastructure Endpoint
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The second Phase 1 PR adds the first real FastAPI endpoint: a liveness health check.
+- `docs/ARCHITECTURE.md` plans all business endpoints under an `/api/...` prefix (`POST
+  /api/ingest`, `POST /api/query`, etc.), which are implemented later in Phase 7.
+- Docker Compose (the next Phase 1 PR) will need a stable, conventional path to configure a
+  container health check against.
+
+Decision:
+
+- Expose the liveness probe at unprefixed `GET /health`, not `GET /api/health`.
+- Keep `/health` free of business logic and authentication; it only reports process liveness.
+- Introduce `memQrag/api/app.py` with a `create_app()` factory as the single place that assembles
+  the FastAPI app and registers routers; future endpoint modules follow the same router-per-file
+  pattern used by `memQrag/api/health.py`.
+
+Consequences:
+
+- `/health` is reserved and must not be reused for a future business endpoint.
+- The upcoming Docker Compose PR can rely on `GET /health` returning `{"status": "ok"}` with a
+  200 status code for its health check configuration.
+- Adding real business endpoints in Phase 7 means adding new router modules and including them in
+  `create_app()`, without touching `/health`.

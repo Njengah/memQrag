@@ -5,8 +5,10 @@ This document captures the intended technical shape and boundaries for memQrag. 
 ## Current Shape
 
 The repository contains project rails plus a placeholder Python package scaffold under
-`memQrag/`. Each submodule below exists as an empty, documented package with no runtime behavior
-implemented yet; see `docs/PRODUCT_TIMELINE.md` for which phase fills each one in.
+`memQrag/`. Most submodules below are still empty, documented packages with no runtime behavior;
+see `docs/PRODUCT_TIMELINE.md` for which phase fills each one in. The one exception is
+`memQrag/api`, which now has a real FastAPI app (`memQrag.api.app.create_app`) exposing a `GET
+/health` liveness endpoint; no business endpoints exist yet.
 
 The planned runtime shape is:
 
@@ -52,7 +54,12 @@ Core entities:
 
 ## API Boundary
 
-Planned endpoints:
+Implemented today:
+
+- `GET /health`: unprefixed infrastructure liveness probe. Not a business endpoint; see
+  "Decision: Unprefixed `/health` Infrastructure Endpoint" in `docs/DECISIONS.md`.
+
+Planned business endpoints (Phase 7):
 
 - `POST /api/ingest`: upload and process documents.
 - `POST /api/query`: ask a question and receive answer metadata.
