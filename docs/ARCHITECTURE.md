@@ -1,0 +1,93 @@
+# Architecture
+
+This document captures the intended technical shape and boundaries for memQrag. It is not an implementation claim.
+
+## Current Shape
+
+The repository currently contains project rails only. Product code has not been built yet.
+
+The planned runtime shape is:
+
+- `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
+- `memQrag/retrieval`: ChromaDB dense retrieval, BM25 sparse retrieval, Reciprocal Rank Fusion, cross-encoder reranking, and confidence scoring.
+- `memQrag/memory`: SQLite-backed session memory, long-term memory, memory-informed retrieval boosts, memory decay, and staleness review signals.
+- `memQrag/agent`: query analysis, multi-hop decomposition, comparative retrieval orchestration, response synthesis, source citation assembly, and low-confidence handling.
+- `memQrag/api`: FastAPI app, request and response schemas, endpoint handlers, and dependency wiring.
+- `ui`: React + Tailwind demo interface.
+
+## Data Stores
+
+- ChromaDB stores chunk embeddings and vector-search records.
+- SQLite stores document metadata, chunk metadata, session memory, long-term memory, staleness state, and contradiction records.
+
+## Planned Data Model
+
+Core entities:
+
+- Document: source document name, file type, created date, last modified date, ingest timestamp, staleness status.
+- Chunk: chunk id, document id, page number, section heading, text excerpt, token count, embedding reference.
+- Session memory: query, retrieved chunks, usefulness flag, session id, timestamp.
+- Long-term memory: query embedding, best document ids, success count, last used, hit rate, decay weight.
+- Retrieval result: chunk id, dense score, sparse rank, fused rank, rerank score, confidence level, applied memory boost.
+- Conflict: entity, claim A, claim B, source chunk references, detection timestamp, review status.
+
+## Retrieval Flow
+
+1. Analyze the query type as FACTUAL, COMPARATIVE, MULTI-HOP, or UNKNOWN.
+2. Check long-term memory for similar successful queries.
+3. Run dense retrieval against ChromaDB for top-20 candidates.
+4. Run BM25 sparse retrieval for top-20 candidates.
+5. Fuse both rankings with Reciprocal Rank Fusion.
+6. Apply memory-informed boosts where appropriate.
+7. Rerank top candidates with a cross-encoder.
+8. Select final top-5 chunks.
+9. Assign confidence using cosine similarity thresholds:
+   - HIGH: greater than 0.85
+   - MEDIUM: 0.65 to 0.85
+   - LOW: less than 0.65
+10. Detect stale and contradictory evidence.
+11. Generate a cited response with explicit confidence and warnings.
+
+## API Boundary
+
+Planned endpoints:
+
+- `POST /api/ingest`: upload and process documents.
+- `POST /api/query`: ask a question and receive answer metadata.
+- `GET /api/memory/session`: view current session memory.
+- `GET /api/memory/longterm`: view persistent memory store.
+- `GET /api/documents`: list ingested documents with staleness flags.
+- `GET /api/conflicts`: list detected document contradictions.
+
+## UI Boundary
+
+The demo UI should prioritize the side-by-side comparison:
+
+- Left panel: standard stateless RAG answer.
+- Right panel: memQrag answer using persistent memory and trust signals.
+- Shared input: one question drives both panels.
+- Supporting surfaces: upload panel, citations, memory panel, staleness banner, contradiction alert.
+
+## External Integrations
+
+The specific embedding model, reranker, and LLM provider are not selected yet. Any provider choice must be recorded in `docs/DECISIONS.md` before implementation.
+
+## Boundaries
+
+- Do not add authentication or hosted deployment before the local MVP works.
+- Do not store hidden memory that users cannot inspect through the API or UI.
+- Do not silently suppress stale or contradictory sources.
+- Do not claim a one-command setup until Docker Compose has been implemented and verified.
+- Do not add real company policy documents to the repository.
+
+## Decisions
+
+Important architecture decisions should be recorded in [`docs/DECISIONS.md`](./DECISIONS.md).
+
+## Out Of Scope
+
+- Multi-tenant SaaS architecture.
+- Automatic source document rewriting.
+- Distributed retrieval infrastructure.
+- Fine-tuning or model training.
+- Compliance certification.
