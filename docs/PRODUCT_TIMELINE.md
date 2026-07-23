@@ -49,7 +49,7 @@ adding a new decision entry.
 Expected PRs:
 
 - [x] Scaffold Python package layout under `memQrag/` with placeholder module boundaries only. (#4)
-- [ ] Scaffold FastAPI app with health endpoint and test harness.
+- [x] Scaffold FastAPI app with health endpoint and test harness. (#5)
 - [ ] Scaffold React + Tailwind demo UI shell with no product workflow logic.
 - [ ] Add Docker Compose for API, UI, ChromaDB, and local volumes.
 - [ ] Add CI or local check scripts for backend tests, frontend build, linting, and formatting.
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Scaffold FastAPI app with health endpoint and test harness.
+- [ ] Scaffold React + Tailwind demo UI shell with no product workflow logic.
