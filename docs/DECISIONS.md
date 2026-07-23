@@ -395,3 +395,59 @@ Consequences:
   caught at this layer; that is an accepted limitation until a new decision changes it.
 - Adding new supported file types, switching to content-sniffing, or changing `RawDocument`'s
   shape requires a new decision entry, since later ingestion PRs depend on this contract.
+
+### Decision: Text Extraction Adapter Behavior
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The second Phase 2 PR turns a validated `RawDocument` (from "Decision: File Intake Contract
+  Design") into extracted text plus the metadata `docs/PRODUCT_TIMELINE.md` calls for: source
+  document, page number, section heading, created date, and last modified date.
+- The four supported formats (PDF, DOCX, TXT, Markdown) have very different native structure:
+  PDF has pages but no reliable general heading markup; DOCX has paragraph styles but no fixed
+  page boundaries outside a rendering engine; TXT has neither; Markdown has ATX headings but no
+  pages.
+- `RawDocument` only carries filename and in-memory bytes, not a filesystem path, so OS-level
+  file timestamps are not available to this layer.
+
+Decision:
+
+- Add `pypdf` (PDF reading) and `python-docx` (DOCX reading) as runtime dependencies in
+  `pyproject.toml`. Both are pure-Python-distributed, permissively licensed, and already the de
+  facto standard choice for these formats without pulling in a heavier OCR/rendering stack.
+- Implement one adapter function per `SupportedFileType` in `memQrag/ingestion/extraction.py`,
+  dispatched by `extract_text(document: RawDocument) -> ExtractedDocument` via a
+  `SupportedFileType -> Callable` lookup table:
+  - PDF: one `ExtractedSegment` per page, with `page_number` set and `section_heading` left
+    unset (no general-purpose PDF heading detection in this PR). `created_date` /
+    `last_modified_date` come from the PDF Info dictionary (`PdfReader.metadata`) when present,
+    else `None`.
+  - DOCX: one `ExtractedSegment` per run of paragraphs between two paragraphs styled
+    `"Heading *"`; `section_heading` is set to the heading text, `page_number` stays unset.
+    `created_date` / `last_modified_date` come from `core_properties.created` /
+    `.modified`, else `None`.
+  - TXT: a single `ExtractedSegment` holding the whole decoded file; no page number or heading;
+    no embedded dates (`None` / `None`).
+  - Markdown: one `ExtractedSegment` per ATX (`#`...`######`) heading section, `section_heading`
+    set to the heading text (or `None` for content before the first heading); no embedded dates.
+- `ExtractedDocument` and `ExtractedSegment` are frozen dataclasses (matching `RawDocument`'s
+  precedent), not Pydantic models.
+- Test fixtures for PDF and DOCX are built in-memory at test time (a hand-assembled minimal PDF
+  byte stream, and `python-docx`'s own `Document` API), not checked-in binary fixture files, to
+  keep the test suite plain-text and self-contained.
+
+Consequences:
+
+- Semantic chunking (Phase 2 PR 3) consumes `ExtractedDocument.segments` as its input units; it
+  must not assume every segment has a page number or heading, since that varies by format.
+- No heading detection exists for PDF in this PR; if a demo document needs PDF section headings
+  later, that requires a new decision (e.g. font-size heuristics or a layout-aware library).
+- TXT and Markdown documents will always have `created_date`/`last_modified_date` set to `None`
+  from this layer; if the API layer (Phase 7) has access to upload-time or filesystem timestamps,
+  it may attach those separately without changing this module's contract.
+- Adding OCR, other file formats, or changing the per-format segmentation strategy requires a new
+  decision entry, since chunking and persistence build on this shape.
