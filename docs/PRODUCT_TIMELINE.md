@@ -69,7 +69,7 @@ Goal:
 Expected PRs:
 
 - [x] Add file intake contracts for PDF, DOCX, TXT, and Markdown. (#9)
-- [ ] Implement text extraction adapters with metadata capture for source document, page number, section heading, created date, and last modified date.
+- [x] Implement text extraction adapters with metadata capture for source document, page number, section heading, created date, and last modified date. (#10)
 - [ ] Implement semantic chunking using sentence embeddings with merge-below-200-token and split-above-800-token behavior.
 - [ ] Persist chunk metadata in SQLite.
 - [ ] Persist vector records in ChromaDB.
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Implement text extraction adapters with metadata capture for source document, page number, section heading, created date, and last modified date.
+- [ ] Implement semantic chunking using sentence embeddings with merge-below-200-token and split-above-800-token behavior.
