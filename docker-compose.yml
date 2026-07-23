@@ -1,0 +1,61 @@
+# Local full-stack composition for memQrag: API, UI, and ChromaDB.
+#
+# Usage: docker compose up --build
+#
+# See docs/DECISIONS.md ("Docker Compose Topology For The Local Full Stack")
+# for image, port, and volume choices. SQLite does not have a schema yet
+# (Phase 4); the api service's ./data/sqlite mount exists so that work does
+# not require revisiting this file.
+
+services:
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    restart: unless-stopped
+    environment:
+      - IS_PERSISTENT=TRUE
+    volumes:
+      - ./data/chroma:/chroma/chroma/
+    ports:
+      - "8001:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v2/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
+    volumes:
+      - ./data/sqlite:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      chroma:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api

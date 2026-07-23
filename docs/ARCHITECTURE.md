@@ -14,6 +14,13 @@ A `ui/` demo UI shell also exists now (Vite + React + TypeScript + Tailwind CSS 
 static placeholder page with no product workflow logic and makes no API calls; see "Decision:
 Frontend Tooling Baseline For The `ui/` Demo" in `docs/DECISIONS.md`.
 
+A root `docker-compose.yml` now wires the `api`, `ui`, and `chroma` services together with local
+bind-mounted volumes; see "Decision: Docker Compose Topology For The Local Full Stack" in
+`docs/DECISIONS.md`. This has been validated by config review and YAML syntax checks, not yet by
+a live `docker compose up --build` run (Docker was unavailable in the authoring environment); do
+not claim a verified one-command setup until that run has actually happened, per the "Boundaries"
+section below.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
