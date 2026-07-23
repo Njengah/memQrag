@@ -302,3 +302,44 @@ Consequences:
   touching `docker-compose.yml`.
 - Changing base images, port mappings, or the bind-mount-vs-named-volume choice later requires a
   new decision entry.
+
+### Decision: CI And Local Check Scripts
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The fifth and final Phase 1 PR needs to close the "backend tests, frontend build, linting, and
+  formatting" tracker item with something contributors and CI both run consistently.
+- Python had lint and format tooling missing; `ui/` already had `oxlint` (lint) and `tsc && vite
+  build` (build) established as its standard checks by "Decision: Frontend Tooling Baseline For
+  The `ui/` Demo".
+- The repository has an active GitHub remote already used for every PR in this project, so GitHub
+  Actions CI gives real, automatic verification on every push and pull request, not just when a
+  contributor remembers to run checks locally.
+
+Decision:
+
+- Add `ruff` (lint + format) as the Python tooling, configured in `pyproject.toml`
+  (`line-length = 100`, `target-version = "py311"`, lint rule sets `E`, `F`, `I`). Use `ruff
+  format` as the formatter (no separate `black`).
+- Do not add a separate frontend formatter (e.g. Prettier) in this PR; `oxlint` + the existing
+  `tsc && vite build` remain the frontend's standard checks, per the prior frontend tooling
+  decision. Revisit only if a real formatting inconsistency shows up.
+- Add `.github/workflows/ci.yml` with two independent jobs, `backend` and `frontend`, running on
+  every push to `main` and every pull request:
+  - `backend`: `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest`.
+  - `frontend`: `npm ci` in `ui/`, then `npm run lint`, `npm run build`.
+- Add `scripts/check.sh` (POSIX) and `scripts/check.ps1` (PowerShell) that run the same checks
+  locally in the same order, so a contributor gets identical results locally and in CI.
+
+Consequences:
+
+- Every future PR gets backend lint/format/tests and frontend lint/build checked automatically by
+  CI, satisfying the Phase 1 exit criterion "Backend and frontend smoke checks pass."
+- Contributors must run `ruff format .` (not just `ruff check .`) before committing Python changes,
+  or CI's `ruff format --check .` step fails the PR.
+- Adding a frontend formatter, a type checker beyond `tsc`, or additional CI jobs (e.g. Docker
+  Compose smoke tests once Docker is available in CI) requires a new decision entry.

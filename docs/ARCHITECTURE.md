@@ -21,6 +21,11 @@ a live `docker compose up --build` run (Docker was unavailable in the authoring 
 not claim a verified one-command setup until that run has actually happened, per the "Boundaries"
 section below.
 
+GitHub Actions CI (`.github/workflows/ci.yml`) and matching local scripts (`scripts/check.sh`,
+`scripts/check.ps1`) now run backend lint/format/tests and frontend lint/build on every push and
+pull request; see "Decision: CI And Local Check Scripts" in `docs/DECISIONS.md`. This completes
+Phase 1's exit criteria.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.

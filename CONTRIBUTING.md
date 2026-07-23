@@ -37,11 +37,26 @@ Every pull request should:
   number, only once the PR is opened;
 - report the next unchecked timeline item in the PR description or summary.
 
-## Code Style
+## Code Style And Checks
 
-Formatting, linting, and type-checking tooling will be documented here once the corresponding
-scaffolding lands (see Phase 1 of `docs/PRODUCT_TIMELINE.md`). Until then, match the existing style
-of the surrounding files.
+Run the standard checks before opening a PR:
+
+```bash
+# Unix/macOS/Linux
+./scripts/check.sh
+
+# Windows PowerShell
+./scripts/check.ps1
+```
+
+These scripts mirror `.github/workflows/ci.yml` exactly: backend `ruff check`, `ruff format
+--check`, and `pytest`; frontend `npm run lint` and `npm run build`. Backend checks assume the
+package is installed with dev dependencies (`pip install -e ".[dev]"`); frontend checks assume
+`ui/` dependencies are installed (`npm install` in `ui/`).
+
+Python code must pass `ruff format .` (not just `ruff check .`) before committing. There is no
+separate frontend formatter yet; `oxlint` and the TypeScript build are the frontend's standard
+checks.
 
 ## Reporting Issues
 
