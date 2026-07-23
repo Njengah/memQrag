@@ -1,0 +1,57 @@
+# --- Python (memQrag/) ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Node / React (ui/) ---
+node_modules/
+ui/dist/
+ui/build/
+.npm/
+.eslintcache
+*.tsbuildinfo
+
+# --- Local data stores (never commit runtime data) ---
+*.sqlite
+*.sqlite3
+*.db
+chroma_data/
+chromadb_data/
+data/
+*.log
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Editors / IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Secrets ---
+*.pem
+*.key
+secrets/

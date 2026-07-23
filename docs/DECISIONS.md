@@ -96,3 +96,29 @@ Consequences:
 - Response schemas need explicit fields for confidence, citations, stale sources, and conflicts.
 - UI states for low confidence, staleness, and contradictions are first-class product requirements.
 - Future answer-generation changes must preserve these trust signals.
+
+### Decision: License memQrag Under MIT
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The repository metadata baseline task requires an explicit license decision before contribution
+  expectations can be documented.
+- memQrag is a local-first, non-hosted demo project intended to be freely usable, forkable, and
+  inspectable by other engineers.
+- No dependency in the planned stack (Python, FastAPI, LangChain, ChromaDB, SQLite, React,
+  Tailwind, Docker) requires a specific reciprocal or copyleft license choice.
+
+Decision:
+
+- License memQrag under the MIT License.
+- Record the license in a root `LICENSE` file with the repository owner as copyright holder.
+
+Consequences:
+
+- Contributors and users can freely use, modify, and redistribute memQrag with minimal friction.
+- No copyleft obligations are imposed on downstream forks or embedders.
+- Changing away from MIT later requires a new decision entry and explicit maintainer sign-off.
