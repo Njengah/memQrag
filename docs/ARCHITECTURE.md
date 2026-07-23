@@ -10,6 +10,10 @@ see `docs/PRODUCT_TIMELINE.md` for which phase fills each one in. The one except
 `memQrag/api`, which now has a real FastAPI app (`memQrag.api.app.create_app`) exposing a `GET
 /health` liveness endpoint; no business endpoints exist yet.
 
+A `ui/` demo UI shell also exists now (Vite + React + TypeScript + Tailwind CSS v4). It renders a
+static placeholder page with no product workflow logic and makes no API calls; see "Decision:
+Frontend Tooling Baseline For The `ui/` Demo" in `docs/DECISIONS.md`.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
@@ -69,6 +73,9 @@ Planned business endpoints (Phase 7):
 - `GET /api/conflicts`: list detected document contradictions.
 
 ## UI Boundary
+
+Implemented today: a static placeholder shell (`ui/src/App.tsx`) with no product workflow logic
+and no API calls. Everything below is planned for Phase 8.
 
 The demo UI should prioritize the side-by-side comparison:
 

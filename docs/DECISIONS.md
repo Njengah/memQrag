@@ -227,3 +227,34 @@ Consequences:
   200 status code for its health check configuration.
 - Adding real business endpoints in Phase 7 means adding new router modules and including them in
   `create_app()`, without touching `/health`.
+
+### Decision: Frontend Tooling Baseline For The `ui/` Demo
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The third Phase 1 PR scaffolds the demo UI shell under `ui/` and needs a concrete toolchain
+  before any product UI work (Phase 8) begins.
+- The stack decision already fixed React and Tailwind CSS; the specific build tool, language, and
+  lint setup still needed to be chosen.
+
+Decision:
+
+- Use [Vite](https://vite.dev/) with the official `react-ts` template as the build tool and dev
+  server for `ui/`.
+- Use Tailwind CSS v4 via the official `@tailwindcss/vite` plugin (single `@import "tailwindcss";`
+  in `src/index.css`; no separate `tailwind.config.js` or PostCSS config required).
+- Keep the default `oxlint` linter that `create-vite` wires up rather than adding ESLint.
+- The shell (`src/App.tsx`) contains no product workflow logic: no API calls, no forms, no state
+  beyond proving the page renders. It only shows a static placeholder message and stack name.
+
+Consequences:
+
+- `npm run build` (`tsc -b && vite build`) and `npm run lint` (`oxlint`) are the standard frontend
+  verification commands for every future UI PR.
+- Phase 8 UI work (chat interface, upload panel, memory panel, split-panel comparison) builds on
+  this shell without re-deciding build tooling.
+- Switching build tool, styling approach, or linter later requires a new decision entry.
