@@ -43,8 +43,14 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
+      # `npm ci` requires package-lock.json to be perfectly in sync, which is
+      # currently unreliable for this project: Vite 8's Rolldown bundler and
+      # Tailwind's Oxide engine ship platform-specific optional native
+      # binaries (e.g. @emnapi/core, @emnapi/runtime) that npm has not
+      # consistently pinned into the lockfile across platforms. See
+      # docs/DECISIONS.md ("CI And Local Check Scripts").
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Lint (oxlint)
         run: npm run lint

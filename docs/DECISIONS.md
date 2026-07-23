@@ -331,7 +331,16 @@ Decision:
 - Add `.github/workflows/ci.yml` with two independent jobs, `backend` and `frontend`, running on
   every push to `main` and every pull request:
   - `backend`: `pip install -e ".[dev]"`, then `ruff check .`, `ruff format --check .`, `pytest`.
-  - `frontend`: `npm ci` in `ui/`, then `npm run lint`, `npm run build`.
+  - `frontend`: `npm install` in `ui/` (not `npm ci`; see below), then `npm run lint`, `npm run
+    build`.
+- Use `npm install` rather than `npm ci` for the frontend CI install step. `npm ci` requires
+  `package-lock.json` to be perfectly in sync and failed in practice: Vite 8's Rolldown bundler
+  and Tailwind's Oxide engine ship platform-specific optional native binaries (e.g.
+  `@emnapi/core`, `@emnapi/runtime`), and `npm install` on this project did not consistently
+  record every platform variant into the lockfile, so a clean-room `npm ci` (as GitHub Actions
+  runs it) failed with "Missing: ... from lock file" even though a local `npm install` worked.
+  `npm install` reconciles the lockfile instead of failing outright, which unblocks CI at the
+  cost of `npm ci`'s stricter reproducibility guarantee.
 - Add `scripts/check.sh` (POSIX) and `scripts/check.ps1` (PowerShell) that run the same checks
   locally in the same order, so a contributor gets identical results locally and in CI.
 
@@ -341,5 +350,9 @@ Consequences:
   CI, satisfying the Phase 1 exit criterion "Backend and frontend smoke checks pass."
 - Contributors must run `ruff format .` (not just `ruff check .`) before committing Python changes,
   or CI's `ruff format --check .` step fails the PR.
+- Frontend CI installs are slightly less strict than `npm ci` would be; if the optional-dependency
+  lockfile drift is fixed upstream (npm, Vite/Rolldown, or Tailwind Oxide), switching back to
+  `npm ci` should be revisited but does not require a new decision entry (it restores the
+  originally intended behavior rather than changing it).
 - Adding a frontend formatter, a type checker beyond `tsc`, or additional CI jobs (e.g. Docker
   Compose smoke tests once Docker is available in CI) requires a new decision entry.
