@@ -26,6 +26,11 @@ GitHub Actions CI (`.github/workflows/ci.yml`) and matching local scripts (`scri
 pull request; see "Decision: CI And Local Check Scripts" in `docs/DECISIONS.md`. This completes
 Phase 1's exit criteria.
 
+Phase 2 (Document Ingestion Pipeline) has started. `memQrag/ingestion/contracts.py` defines the
+file intake contract: `SupportedFileType` (PDF, DOCX, TXT, MARKDOWN), the `RawDocument` dataclass,
+and `intake_document()`/`detect_file_type()` validation functions; see "Decision: File Intake
+Contract Design" in `docs/DECISIONS.md`. No text extraction, chunking, or persistence exists yet.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
