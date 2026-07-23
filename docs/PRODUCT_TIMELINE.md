@@ -37,6 +37,15 @@ Goal:
 
 > Create the smallest runnable full-stack shape without implementing the full RAG pipeline.
 
+Implementation order:
+
+The PRs below must land in the listed order. Each PR depends on the artifact produced by the
+previous one (package scaffold before the API that lives in it, API and UI before the Docker
+Compose that wires them together, backend tests and a frontend build target before the check
+scripts that run them). See "Decision: Phase 1 Implementation PR Order" in
+[`docs/DECISIONS.md`](./DECISIONS.md) for the full rationale. Do not reorder this list without
+adding a new decision entry.
+
 Expected PRs:
 
 - [ ] Scaffold Python package layout under `memQrag/` with placeholder module boundaries only.
