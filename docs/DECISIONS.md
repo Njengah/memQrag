@@ -356,3 +356,42 @@ Consequences:
   originally intended behavior rather than changing it).
 - Adding a frontend formatter, a type checker beyond `tsc`, or additional CI jobs (e.g. Docker
   Compose smoke tests once Docker is available in CI) requires a new decision entry.
+
+### Decision: File Intake Contract Design
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The first Phase 2 PR needs a shared contract that the text extraction adapters (Phase 2 PR 2)
+  will consume, without implementing any actual extraction yet.
+- `docs/PROJECT_BLUEPRINT.md` fixes the supported file types as PDF, DOCX, TXT, and Markdown, and
+  explicitly lists "Building unsupported file types before PDF, DOCX, TXT, and Markdown are
+  complete" as a non-goal.
+
+Decision:
+
+- Detect file type by filename extension only (no content/MIME sniffing) via
+  `memQrag.ingestion.contracts.detect_file_type`. This is simple, predictable, and sufficient for
+  a local demo where the user controls the uploaded files; content-sniffing can be added later as
+  a new decision if extension spoofing becomes a real concern.
+- `SupportedFileType` is a `str` enum with four members: `PDF`, `DOCX`, `TXT`, `MARKDOWN`. Both
+  `.md` and `.markdown` extensions map to `MARKDOWN`.
+- `RawDocument` is a frozen `dataclasses.dataclass`, not a Pydantic model. Ingestion domain
+  contracts stay decoupled from the API layer's request/response schemas (Pydantic, via FastAPI);
+  the `memQrag/api` layer will translate HTTP upload payloads into `RawDocument` instances when
+  `POST /api/ingest` is implemented in Phase 7.
+- `intake_document(filename, content)` is the single validated entry point later ingestion steps
+  call; it raises `UnsupportedFileTypeError` (unsupported extension) or `ValueError` (empty
+  filename/content) rather than silently accepting bad input.
+
+Consequences:
+
+- Text extraction adapters (Phase 2 PR 2) accept a `RawDocument` and dispatch on its `file_type`,
+  without re-deriving file type detection themselves.
+- Uploading a file with a spoofed extension (e.g. a `.txt` file that is actually a PDF) is not
+  caught at this layer; that is an accepted limitation until a new decision changes it.
+- Adding new supported file types, switching to content-sniffing, or changing `RawDocument`'s
+  shape requires a new decision entry, since later ingestion PRs depend on this contract.
