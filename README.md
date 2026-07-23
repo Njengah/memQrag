@@ -60,3 +60,8 @@ Do not add setup commands here until the corresponding implementation exists and
 - [Architecture](./docs/ARCHITECTURE.md)
 - [Development cycle](./docs/DEVELOPMENT_CYCLE.md)
 - [Decisions](./docs/DECISIONS.md)
+- [Contributing](./CONTRIBUTING.md)
+
+## License
+
+MIT. See [`LICENSE`](./LICENSE).
