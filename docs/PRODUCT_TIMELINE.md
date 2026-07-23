@@ -22,7 +22,7 @@ Expected PRs:
 
 - [x] Add README, project blueprint, roadmap, architecture, decisions log, development cycle, and agent instructions. (#1)
 - [x] Add repository metadata baseline, including `.gitignore`, license decision, and contribution expectations. (#2)
-- [ ] Choose and document the first implementation PR order.
+- [x] Choose and document the first implementation PR order. (#3)
 
 Exit criteria:
 
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Choose and document the first implementation PR order.
+- [ ] Scaffold Python package layout under `memQrag/` with placeholder module boundaries only.
