@@ -52,7 +52,7 @@ Expected PRs:
 - [x] Scaffold FastAPI app with health endpoint and test harness. (#5)
 - [x] Scaffold React + Tailwind demo UI shell with no product workflow logic. (#6)
 - [x] Add Docker Compose for API, UI, ChromaDB, and local volumes. (#7)
-- [ ] Add CI or local check scripts for backend tests, frontend build, linting, and formatting.
+- [x] Add CI or local check scripts for backend tests, frontend build, linting, and formatting. (#8)
 
 Exit criteria:
 
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add CI or local check scripts for backend tests, frontend build, linting, and formatting.
+- [ ] Add file intake contracts for PDF, DOCX, TXT, and Markdown.
