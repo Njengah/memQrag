@@ -33,8 +33,12 @@ Contract Design" in `docs/DECISIONS.md`. `memQrag/ingestion/extraction.py` now t
 `RawDocument` into an `ExtractedDocument` (source document, created/modified dates, and a list of
 `ExtractedSegment`s with page number and/or section heading where the format supports it), via
 per-format adapters (`pypdf` for PDF, `python-docx` for DOCX, stdlib decoding for TXT/Markdown);
-see "Decision: Text Extraction Adapter Behavior" in `docs/DECISIONS.md`. Semantic chunking and
-persistence do not exist yet.
+see "Decision: Text Extraction Adapter Behavior" in `docs/DECISIONS.md`. `memQrag/ingestion/chunking.py`
+now turns an `ExtractedDocument` into `Chunk`s: sentences within each segment are embedded (via
+`memQrag/ingestion/embeddings.py`, using `fastembed`'s `BAAI/bge-small-en-v1.5` model) and grouped
+at semantic-similarity breakpoints, then merged below 200 tokens and split above 800 tokens; see
+"Decision: Sentence Embedding Model For Semantic Chunking" and "Decision: Semantic Chunking
+Algorithm" in `docs/DECISIONS.md`. Persistence into SQLite and ChromaDB does not exist yet.
 
 The planned runtime shape is:
 

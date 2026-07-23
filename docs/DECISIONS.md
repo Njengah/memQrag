@@ -451,3 +451,103 @@ Consequences:
   it may attach those separately without changing this module's contract.
 - Adding OCR, other file formats, or changing the per-format segmentation strategy requires a new
   decision entry, since chunking and persistence build on this shape.
+
+### Decision: Sentence Embedding Model For Semantic Chunking
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The third Phase 2 PR needs to embed sentences to detect semantic breakpoints, per
+  `docs/PRODUCT_TIMELINE.md` ("Implement semantic chunking using sentence embeddings").
+- `docs/ARCHITECTURE.md` ("External Integrations") requires any embedding model choice to be
+  recorded here before implementation, and notes the final retrieval-time embedding model is not
+  selected yet (that is a Phase 3 decision, made when ChromaDB storage is wired up in Phase 2 PR
+  5 or when hybrid retrieval is built in Phase 3).
+- `sentence-transformers`, the most commonly cited "sentence embeddings" library, requires
+  PyTorch even when using its ONNX backend (confirmed via current sentence-transformers docs), which
+  is a heavy (600MB-1.2GB) dependency for a step that only needs inference, not training.
+
+Decision:
+
+- Use [`fastembed`](https://github.com/qdrant/fastembed) (Qdrant's ONNX-runtime-based embedding
+  library) with its default dense text model, `BAAI/bge-small-en-v1.5` (384-dim), for the
+  sentence embeddings used during chunking. It has no PyTorch dependency (~50MB of new packages
+  vs. 600MB+ for sentence-transformers) and downloads a small quantized ONNX model on first use,
+  cached locally by `huggingface_hub`.
+- Wrap it behind `memQrag.ingestion.embeddings.embed_sentences(sentences) -> list[list[float]]`,
+  a plain function with no fastembed types in its signature, so the chunking algorithm depends on
+  a `Callable[[Sequence[str]], Sequence[Sequence[float]]]` shape, not on fastembed directly.
+- This is scoped to chunking only. It does not fix the embedding model used for ChromaDB storage
+  (Phase 2 PR 5) or retrieval (Phase 3); those PRs may reuse `bge-small-en-v1.5` for consistency
+  between chunk-time and query-time embeddings, or choose differently, but must record that choice
+  explicitly when made.
+
+Consequences:
+
+- First use of chunking on a machine without a cached model requires network access to download
+  the model; `tests/test_ingestion_embeddings.py` skips itself (rather than failing) if that
+  download is not possible, since this module's own unit tests should not be network-flaky. The
+  chunking algorithm's tests use a fake embedding function instead (see "Decision: Semantic
+  Chunking Algorithm").
+- Switching embedding libraries or models later requires a new decision entry, since it changes
+  where semantic chunk boundaries land for already-documented behavior.
+
+### Decision: Semantic Chunking Algorithm
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- `docs/PRODUCT_TIMELINE.md` specifies three behaviors for this PR: semantic chunking using
+  sentence embeddings, merging chunks below 200 tokens, and splitting chunks above 800 tokens.
+- Sentence embedding generation is an external, network-and-model-dependent operation (see
+  "Decision: Sentence Embedding Model For Semantic Chunking"); the chunking algorithm itself
+  should still be deterministically unit-testable without it.
+- No LLM or embedding provider's exact tokenizer has been chosen yet (`docs/ARCHITECTURE.md`,
+  "External Integrations"), so an exact token count is not yet meaningful.
+
+Decision:
+
+- `memQrag/ingestion/chunking.py` implements `chunk_document(document: ExtractedDocument, embed:
+  EmbeddingFunction) -> list[Chunk]`, where `EmbeddingFunction` is a plain
+  `Callable[[Sequence[str]], Sequence[Sequence[float]]]`. Production callers pass
+  `memQrag.ingestion.embeddings.embed_sentences`; tests pass a small deterministic fake, keeping
+  the algorithm's tests fast and network-free.
+- Sentence splitting uses a lightweight punctuation-based regex heuristic (no NLTK/spaCy
+  dependency), sufficient for the demo's fictional documents; `docs/DECISIONS.md` should be
+  updated if a more sophisticated splitter is needed later.
+- Token counting (`estimate_token_count`) is a whitespace word-count approximation, not a real
+  LLM tokenizer, since no provider's tokenizer has been chosen yet. This is an explicit,
+  intentional approximation that the 200/800 thresholds are measured against; revisit when Phase
+  7 picks an LLM provider.
+- Algorithm, run once per `ExtractedSegment` (chunks never span segments, to keep each chunk's
+  inherited `page_number`/`section_heading` accurate):
+  1. Split the segment's text into sentences.
+  2. Embed all sentences in one batch call and walk adjacent pairs; start a new group whenever
+     cosine similarity between neighboring sentence embeddings drops below `0.5`, otherwise
+     extend the current group. A single-sentence segment skips embedding entirely.
+  3. Merge each undersized group (< `MIN_CHUNK_TOKENS` = 200) forward into the next group; if the
+     final group is still undersized, merge it backward into the previous one instead. This is a
+     pure token-count pass and intentionally ignores semantic similarity once triggered.
+  4. Split any resulting group over `MAX_CHUNK_TOKENS` = 800 back into multiple chunks, greedily
+     accumulating sentences until the next one would exceed the limit.
+- `Chunk` (the output type) carries `text`, `token_count`, `source_document`, `page_number`, and
+  `section_heading` only. It intentionally omits `chunk_id`, `document_id`, and `embedding
+  reference` from `docs/ARCHITECTURE.md`'s planned `Chunk` entity, since those only become
+  meaningful once persistence (Phase 2 PRs 4-5) assigns real identifiers.
+
+Consequences:
+
+- Chunking is deterministic and fully unit-testable without a model or network call; only the
+  default `embed_sentences` wiring needs (skippable) network-dependent testing.
+- A chunk can still exceed `MAX_CHUNK_TOKENS` if a single sentence alone exceeds it (an accepted
+  edge case; no sub-sentence splitting is implemented).
+- Persistence PRs (4-5) consume `Chunk` as-is and are responsible for assigning `chunk_id`,
+  `document_id`, and the embedding reference when writing to SQLite/ChromaDB.
+- Changing the similarity threshold, the merge/split strategy, or the token estimation method
+  later requires a new decision entry, since retrieval quality depends on chunk boundaries.
