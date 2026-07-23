@@ -4,7 +4,9 @@ This document captures the intended technical shape and boundaries for memQrag. 
 
 ## Current Shape
 
-The repository currently contains project rails only. Product code has not been built yet.
+The repository contains project rails plus a placeholder Python package scaffold under
+`memQrag/`. Each submodule below exists as an empty, documented package with no runtime behavior
+implemented yet; see `docs/PRODUCT_TIMELINE.md` for which phase fills each one in.
 
 The planned runtime shape is:
 

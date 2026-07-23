@@ -164,3 +164,36 @@ Consequences:
 - Docker Compose (step 4) and CI (step 5) will fail fast and obviously if earlier scaffolding is
   incomplete, since they depend directly on artifacts from steps 1 through 3.
 - Reordering Phase 1 PRs later requires a new decision entry superseding this one.
+
+### Decision: Python Packaging Baseline For The `memQrag` Package
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The first Phase 1 PR introduces the `memQrag/` package scaffold and needs a way to make it
+  importable and testable without committing to product dependencies (FastAPI, LangChain,
+  ChromaDB) before they are actually used.
+- A Python version floor and build backend need to be picked so later PRs do not each re-decide
+  packaging basics.
+
+Decision:
+
+- Use `pyproject.toml` with the `setuptools` build backend and flat-layout package discovery
+  (`memQrag*`) as the single source of packaging metadata; no `setup.py` or `setup.cfg`.
+- Set `requires-python = ">=3.11"`.
+- Keep `dependencies` empty until a PR actually needs a runtime dependency; add dev-only tooling
+  (starting with `pytest`) under `[project.optional-dependencies].dev`.
+- Place tests under a root-level `tests/` directory (not nested inside `memQrag/`), run via
+  `python -m pytest` or an editable install (`pip install -e ".[dev]"`).
+
+Consequences:
+
+- Later Phase 1/2/3 PRs add their runtime dependencies (FastAPI, LangChain, ChromaDB, etc.) to
+  `dependencies` in `pyproject.toml` as each is actually wired in, instead of front-loading an
+  unused dependency list.
+- Contributors run one standard command (`pip install -e ".[dev]"` then `pytest`) regardless of
+  which backend module they are working on.
+- Switching build backend or package layout later requires a new decision entry.
