@@ -26,10 +26,15 @@ GitHub Actions CI (`.github/workflows/ci.yml`) and matching local scripts (`scri
 pull request; see "Decision: CI And Local Check Scripts" in `docs/DECISIONS.md`. This completes
 Phase 1's exit criteria.
 
-Phase 2 (Document Ingestion Pipeline) has started. `memQrag/ingestion/contracts.py` defines the
+Phase 2 (Document Ingestion Pipeline) is underway. `memQrag/ingestion/contracts.py` defines the
 file intake contract: `SupportedFileType` (PDF, DOCX, TXT, MARKDOWN), the `RawDocument` dataclass,
 and `intake_document()`/`detect_file_type()` validation functions; see "Decision: File Intake
-Contract Design" in `docs/DECISIONS.md`. No text extraction, chunking, or persistence exists yet.
+Contract Design" in `docs/DECISIONS.md`. `memQrag/ingestion/extraction.py` now turns a
+`RawDocument` into an `ExtractedDocument` (source document, created/modified dates, and a list of
+`ExtractedSegment`s with page number and/or section heading where the format supports it), via
+per-format adapters (`pypdf` for PDF, `python-docx` for DOCX, stdlib decoding for TXT/Markdown);
+see "Decision: Text Extraction Adapter Behavior" in `docs/DECISIONS.md`. Semantic chunking and
+persistence do not exist yet.
 
 The planned runtime shape is:
 
