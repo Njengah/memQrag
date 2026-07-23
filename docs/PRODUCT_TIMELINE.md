@@ -21,7 +21,7 @@ Goal:
 Expected PRs:
 
 - [x] Add README, project blueprint, roadmap, architecture, decisions log, development cycle, and agent instructions. (#1)
-- [ ] Add repository metadata baseline, including `.gitignore`, license decision, and contribution expectations.
+- [x] Add repository metadata baseline, including `.gitignore`, license decision, and contribution expectations. (#2)
 - [ ] Choose and document the first implementation PR order.
 
 Exit criteria:
@@ -239,4 +239,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add README, project blueprint, roadmap, architecture, decisions log, development cycle, and agent instructions.
+- [ ] Choose and document the first implementation PR order.
