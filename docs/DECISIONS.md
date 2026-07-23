@@ -258,3 +258,47 @@ Consequences:
 - Phase 8 UI work (chat interface, upload panel, memory panel, split-panel comparison) builds on
   this shell without re-deciding build tooling.
 - Switching build tool, styling approach, or linter later requires a new decision entry.
+
+### Decision: Docker Compose Topology For The Local Full Stack
+
+Date: 2026-07-23
+
+Status: accepted.
+
+Context:
+
+- The fourth Phase 1 PR wires the API, UI, and ChromaDB into one local Docker Compose stack, per
+  "Decision: Build memQrag As A Local-First Production-Shaped RAG System".
+- SQLite has no schema yet (Phase 4), but the compose topology needs a stable place for it to
+  land later without another infrastructure PR.
+- `memQrag/api` already exposes `GET /health` (see "Decision: Unprefixed `/health` Infrastructure
+  Endpoint"), which this PR relies on for the API container's health check.
+
+Decision:
+
+- `chroma` service uses the official `ghcr.io/chroma-core/chroma:latest` image with
+  `IS_PERSISTENT=TRUE`, per Chroma's documented Docker Compose setup, healthchecked against its
+  `/api/v2/heartbeat` endpoint.
+- `api` service builds from a root-level `Dockerfile` (`python:3.12-slim`, installs the `memQrag`
+  package via `pip install .`, runs `uvicorn memQrag.api.app:app`), healthchecked against
+  `GET /health`, and depends on `chroma` being healthy before starting.
+- `ui` service builds from `ui/Dockerfile`: a multi-stage build (`node:24-alpine` to run
+  `npm run build`, then `nginx:stable-alpine` serving the built `dist/` output on port 80).
+- Host port mapping: API on `8000`, ChromaDB on `8001` (avoids colliding with the API's `8000`),
+  UI on `3000`.
+- Persistence uses local bind mounts under a root `data/` directory (already covered by the
+  existing `.gitignore` `data/` entry) rather than named Docker volumes: `./data/chroma` for
+  ChromaDB and `./data/sqlite` for the future SQLite database. This keeps local-first data
+  physically inspectable on the host, consistent with the project's local-first, non-hidden-state
+  philosophy.
+
+Consequences:
+
+- `docker compose up --build` is the standard way to run the full local stack once this PR lands;
+  README's one-command setup claim is only added after a real `docker compose up --build` run is
+  verified (per `docs/ARCHITECTURE.md` "Boundaries"), which was not possible in the environment
+  this PR was authored in (Docker is not installed there — see PR verification notes).
+- Phase 4 (SQLite schema) can start writing to `/app/data` inside the `api` container without
+  touching `docker-compose.yml`.
+- Changing base images, port mappings, or the bind-mount-vs-named-volume choice later requires a
+  new decision entry.
