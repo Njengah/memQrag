@@ -140,6 +140,13 @@ persists that status for every document. Re-ingestion via `save_document()` rese
 `FRESH`. See "Decision: Configurable Staleness Detection For Frequently Retrieved Documents" in
 `docs/DECISIONS.md`. Like boost/decay, nothing calls `detect_stale_documents()` on a schedule yet.
 
+`tests/test_memory_pipeline.py` now stitches session / long-term / boost / decay / staleness
+together against one shared SQLite fixture and directly asserts all three Phase 4 exit criteria
+(similar-query boosts, stale-document surfacing, reduced influence from old low-value memory).
+`applied_memory_boost` stays on `BoostedRetrievalResult` only — propagating it through
+rerank/confidence types is deferred until Phase 6/7 orchestration needs it. See "Decision:
+End-To-End Memory And Staleness Fixture Tests" in `docs/DECISIONS.md`. This completes Phase 4.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.

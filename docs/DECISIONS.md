@@ -1448,3 +1448,65 @@ Consequences:
 - Changing `STALENESS_AGE_DAYS`, `MIN_RETRIEVAL_COUNT`, the both-conditions-required rule, the
   `effective_document_date` fallback order, or promoting this into a separate review-workflow
   table later requires a new decision entry.
+
+### Decision: End-To-End Memory And Staleness Fixture Tests
+
+Date: 2026-07-25
+
+Status: accepted.
+
+Context:
+
+- The sixth and final Phase 4 PR is "Add memory and staleness tests," closing out Phase 4's three
+  exit criteria in `docs/PRODUCT_TIMELINE.md`: similar queries can boost previously successful
+  documents; stale frequently retrieved documents are surfaced for review; old low-value memory
+  has reduced retrieval influence.
+- Every Phase 4 module (`session`, `long_term`, `boost`, `decay`, `staleness`) already has its own
+  focused unit tests, but no test exercises them composed together against one shared SQLite
+  fixture — mirroring the gap `tests/test_retrieval_pipeline.py` closed for Phase 3 (see
+  "Decision: End-To-End Retrieval Fixture Tests").
+- "Memory-Informed Retrieval Boosts" deferred two questions to this PR: (1) stitching
+  `apply_memory_boost()` into an actual fusion -> boost (-> rerank -> confidence) sequence, and
+  (2) whether `applied_memory_boost` should propagate onto `RerankedRetrievalResult` /
+  `ScoredRetrievalResult`. "Configurable Staleness Detection" likewise asked this PR to stitch
+  memory + staleness together the way Phase 3's final PR stitched retrieval stages.
+- No orchestration/pipeline module exists for memory either; per the same Phase 2/3 precedent,
+  this PR is test-only and calls the existing per-module functions directly in sequence.
+
+Decision:
+
+- Add `tests/test_memory_pipeline.py`. It builds a small fictional two-document SQLite fixture
+  (return-policy vs shipping) plus an old/new policy pair for staleness, and asserts each Phase 4
+  exit criterion as its own test function:
+  - **Boost:** `remember_query_outcome` -> `find_similar_successful_memory` ->
+    `apply_memory_boost` on a synthetic fused ranking where the previously-successful document
+    starts behind; the boosted ranking reorders it first with a non-zero `applied_memory_boost`.
+  - **Decay:** mixed outcomes + aged `last_used` -> `apply_memory_decay` shrinks `decay_weight`;
+    default `find_similar_successful_memory` then returns `None` (low hit rate fails its gate), so
+    the default boost path applies zero influence; applying the decayed record directly still
+    scales `BOOST_AMOUNT` by `decay_weight`, proving that wiring.
+  - **Staleness:** old + frequently retrieved document is returned by `detect_stale_documents`
+    and persisted as `STALE`; a frequent-but-recent peer stays `FRESH`.
+  - **Session -> LTM composition:** `record_session_query` -> `set_usefulness` ->
+    `promote_session_memory_to_long_term` -> `find_similar_successful_memory` ->
+    `apply_memory_boost`, using the real embedder and skipping (not failing) if it can't load.
+- Hand-picked query embeddings (not the real embedder) drive the boost/decay path so those exit
+  criteria stay deterministic and network-free; only the session-promotion composition check needs
+  `embed_sentences`.
+- **Type-propagation decision:** `applied_memory_boost` stays on `BoostedRetrievalResult` only.
+  Propagating it onto `RerankedRetrievalResult` / `ScoredRetrievalResult` (and teaching `rerank` to
+  accept boosted inputs) is deferred until Phase 6/7 builds real orchestration — changing those
+  types with no production caller would be speculative schema churn, the same reason earlier PRs
+  deferred unused columns. The integration tests stitch through fusion -> boost (architecture
+  steps 5-6) and leave steps 7-9 to the existing retrieval pipeline tests; the eventual API layer
+  will call `apply_memory_boost` between `reciprocal_rank_fusion` and `rerank` the same way these
+  tests do.
+
+Consequences:
+
+- This completes Phase 4's exit criteria and its tracker.
+- Phase 5 (Contradiction Detection) starts next; it should not re-open memory type-propagation
+  unless contradiction results also need to ride on the same retrieval result types.
+- Changing the exit-criterion assertions, bringing `applied_memory_boost` into rerank/confidence
+  types, or adding a production orchestration module that wraps this sequence later requires a new
+  decision entry.
