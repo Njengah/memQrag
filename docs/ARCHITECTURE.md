@@ -93,7 +93,14 @@ foreign key, since `chunks.id` rows get replaced wholesale on re-ingestion — `
 `connect()` opens that shared file and ensures both modules' tables exist.
 `record_session_query()`/`set_usefulness()`/`get_session_memory()` are plain write/read
 functions; no memory-informed boosting logic exists yet. See "Decision: SQLite Schema For
-Session Memory Records" in `docs/DECISIONS.md`.
+Session Memory Records" in `docs/DECISIONS.md`. `memQrag/memory/long_term.py` adds a
+`long_term_memory` table (`query`, `best_document_ids` — also a JSON-encoded list, kept
+consistent with session memory's shape even though `documents.id` is stable enough that a
+foreign key would be safe here — `success_count`, `hit_rate`, `decay_weight`, `last_used`) to the
+same shared database; `connect()` extends `memory.session.connect()`'s chain. No query-embedding
+column yet (deferred until Phase 4 PR 3 needs similarity search), and `update_long_term_memory()`
+is a plain field setter, not the boosting/decay formulas themselves. See "Decision: SQLite Schema
+For Long-Term Memory Records" in `docs/DECISIONS.md`.
 
 The planned runtime shape is:
 
