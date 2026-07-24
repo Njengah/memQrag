@@ -3,9 +3,12 @@
 # Usage: docker compose up --build
 #
 # See docs/DECISIONS.md ("Docker Compose Topology For The Local Full Stack")
-# for image, port, and volume choices. SQLite does not have a schema yet
-# (Phase 4); the api service's ./data/sqlite mount exists so that work does
-# not require revisiting this file.
+# for image, port, and volume choices. The memQrag.ingestion.storage SQLite
+# schema (documents/chunks; see "Decision: SQLite Persistence For Document
+# And Chunk Metadata") defaults to data/memqrag.db relative to the process's
+# working directory, which resolves to /app/data/memqrag.db here, landing on
+# the host at ./data/sqlite/memqrag.db via the api service's mount below.
+# The FastAPI app does not call into this schema yet (Phase 7).
 
 services:
   chroma:

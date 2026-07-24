@@ -551,3 +551,60 @@ Consequences:
   `document_id`, and the embedding reference when writing to SQLite/ChromaDB.
 - Changing the similarity threshold, the merge/split strategy, or the token estimation method
   later requires a new decision entry, since retrieval quality depends on chunk boundaries.
+
+### Decision: SQLite Persistence For Document And Chunk Metadata
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fourth Phase 2 PR needs to persist what `memQrag.ingestion.extraction` and
+  `memQrag.ingestion.chunking` already produce (`ExtractedDocument`, `Chunk`) into SQLite, per
+  `docs/PRODUCT_TIMELINE.md`'s exit criterion "Chunk metadata can be queried from SQLite."
+  `docs/ARCHITECTURE.md`'s planned `Chunk` entity also lists `embedding reference`, and the
+  planned `Document` entity lists `staleness status`, but neither is meaningful yet:
+  `embedding reference` only exists once ChromaDB vectors are written (Phase 2 PR 5, not this
+  one), and `staleness status` is only computed once Phase 4 implements staleness detection.
+- `docker-compose.yml` already reserves a `./data/sqlite:/app/data` bind mount for the API
+  container (see "Decision: Docker Compose Topology For The Local Full Stack"), so the database
+  file's location should line up with that mount without requiring compose changes later.
+- The project has consistently preferred the lightest dependency that does the job (e.g. `pypdf`/
+  `python-docx` over heavier alternatives, `fastembed` over `sentence-transformers`).
+
+Decision:
+
+- Use Python's built-in `sqlite3` module directly; no ORM (e.g. SQLAlchemy) for this PR. Schema
+  and queries live in `memQrag/ingestion/storage.py`.
+- Schema, created via `CREATE TABLE IF NOT EXISTS`:
+  - `documents(id INTEGER PRIMARY KEY, filename TEXT UNIQUE NOT NULL, file_type TEXT NOT NULL,
+    created_date TEXT, last_modified_date TEXT, ingested_at TEXT NOT NULL)`. Dates are stored as
+    ISO 8601 strings (SQLite has no native datetime type) and parsed back to `datetime` on read.
+    No `staleness_status` column yet; add it in a new decision when Phase 4 needs it.
+  - `chunks(id INTEGER PRIMARY KEY, document_id INTEGER NOT NULL REFERENCES documents(id) ON
+    DELETE CASCADE, page_number INTEGER, section_heading TEXT, text TEXT NOT NULL, token_count
+    INTEGER NOT NULL)`. No `embedding_reference` column yet; add it in a new decision alongside
+    Phase 2 PR 5 (ChromaDB persistence).
+  - `PRAGMA foreign_keys = ON` is set per connection, since SQLite does not enforce foreign keys
+    by default.
+- `filename` is the natural key for `documents`. Re-ingesting an already-known filename updates
+  that row in place (`INSERT ... ON CONFLICT(filename) DO UPDATE`) rather than creating a
+  duplicate, and `replace_chunks()` deletes and re-inserts that document's chunks. This keeps
+  repeated demo ingestion idempotent instead of accumulating duplicate rows.
+- The default database file is `data/memqrag.db` (relative to the process's working directory),
+  matching the existing `data/` `.gitignore` entry. Running the API from the repository root
+  inside the `api` container (working directory `/app`, per the existing `Dockerfile`) resolves
+  this to `/app/data/memqrag.db`, which lands on the host at `./data/sqlite/memqrag.db` through
+  the mount already reserved in `docker-compose.yml` — no compose change needed.
+- All functions take a plain `sqlite3.Connection` (dependency injection), so tests use
+  `sqlite3.connect(":memory:")` instead of touching disk.
+
+Consequences:
+
+- Phase 2 PR 5 (ChromaDB persistence) and Phase 4 (staleness detection) each add a column via a
+  new decision entry plus an `ALTER TABLE` (or equivalent) rather than being blocked on this PR.
+- Session memory, long-term memory, and contradiction records (Phases 4-5) get their own tables
+  in their own PRs; this PR only owns `documents` and `chunks`.
+- Switching to an ORM, changing the natural key, or changing the re-ingestion (upsert vs.
+  versioned history) behavior later requires a new decision entry.
