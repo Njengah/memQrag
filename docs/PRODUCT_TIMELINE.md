@@ -94,7 +94,7 @@ Expected PRs:
 - [x] Implement Reciprocal Rank Fusion for dense and sparse results. (#17)
 - [x] Add cross-encoder reranking of top-20 candidates to final top-5. (#18)
 - [x] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds. (#19)
-- [ ] Add retrieval tests for ranking, fusion, reranking, and confidence labels.
+- [x] Add retrieval tests for ranking, fusion, reranking, and confidence labels. (#20)
 
 Exit criteria:
 
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add retrieval tests for ranking, fusion, reranking, and confidence labels.
+- [ ] Add SQLite schema for session memory records.
