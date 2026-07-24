@@ -28,7 +28,12 @@ Implemented so far (Phase 4 of docs/PRODUCT_TIMELINE.md):
   in 30+ days) and low-value (low hit rate), so `apply_memory_boost` gives
   them progressively less retrieval influence over time; a record that
   gets reused before decaying, or that decays and is later reused, is
-  restored to full strength.
-
-Staleness review does not exist yet.
+  restored to full strength;
+- staleness detection in `memQrag.memory.staleness`
+  (`effective_document_date`, `count_document_retrievals`, `is_stale`,
+  `detect_stale_documents`), which flags a document `STALE`
+  (`memQrag.ingestion.storage.DocumentStalenessStatus`) once it is both
+  old (no fresher content in 90+ days) and frequently retrieved (its
+  chunks show up often in `session_memory`), persisting the result on
+  `documents.staleness_status`.
 """

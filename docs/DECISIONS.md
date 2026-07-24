@@ -1374,3 +1374,77 @@ Consequences:
 - Changing `DECAY_AGE_DAYS`, `DECAY_HIT_RATE_THRESHOLD`, `DECAY_FACTOR`, `MIN_DECAY_WEIGHT`, the
   "recompute from scratch" (vs. "multiply the stored value") formula, or how `apply_memory_boost`
   incorporates `decay_weight` later requires a new decision entry.
+
+### Decision: Configurable Staleness Detection For Frequently Retrieved Documents
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fifth Phase 4 PR implements `docs/PRODUCT_TIMELINE.md`'s "Implement configurable staleness
+  detection for frequently retrieved documents older than 90 days" and its exit criterion "Stale
+  frequently retrieved documents are surfaced for review." "SQLite Persistence For Document And
+  Chunk Metadata" deferred `documents.staleness_status` until this PR needed it.
+- Age alone is the wrong signal: an old, never-retrieved document is unimportant, not a review
+  priority. Frequency alone is also wrong: a frequently retrieved *recent* document is working as
+  intended. Both conditions together are what the tracker item actually describes.
+- AGENTS.md says SQLite stores "staleness review state," and `docs/ARCHITECTURE.md`'s planned
+  Document entity lists `staleness status`. A separate review-workflow table (with assignees,
+  notes, resolution timestamps) would be overbuilt for a demo that only needs to *surface* stale
+  documents — Phase 7's `GET /api/documents` and Phase 8's staleness banner can read a status
+  column directly. A fuller review workflow can still be layered on later if a real need shows up.
+- Retrieval frequency is already observable in `session_memory.retrieved_chunk_ids` (every query
+  records which chunks it retrieved). Counting across every session, not just the current one, is
+  what "frequently retrieved" means product-wide — a document retrieved five times in five
+  different sessions is more of a review priority than one retrieved five times in a single
+  throwaway session, but for MVP both count the same (a query is a query).
+- There is still no migration framework (same precedent as adding `query_embedding`/`match_count`
+  in Phase 4 PR 3). Adding a column to an existing table only affects local, gitignored
+  `data/memqrag.db` files; a developer with a pre-existing local database from before this PR must
+  delete that file to pick up the new column.
+
+Decision:
+
+- Add `staleness_status` (`TEXT NOT NULL DEFAULT 'fresh'`) to the `documents` table, with a
+  `DocumentStalenessStatus` enum (`FRESH` / `STALE`). Stored on the document itself rather than a
+  separate table, matching the planned Document entity and keeping the Phase 7/8 "list documents
+  with staleness flags" surface a single-table read.
+- `save_document()` always writes `FRESH` (including on re-ingestion upsert), so refreshing a
+  document's content clears any prior stale flag — the re-ingested content is what is now stored,
+  and earlier evidence no longer applies.
+- Add `get_all_documents()` and `update_document_staleness_status()` on
+  `memQrag.ingestion.storage` (plain list / field setter, same pattern as long-term memory's
+  update helper). Add `get_all_session_memory()` on `memQrag.memory.session` so staleness can count
+  retrievals across every session, not just one.
+- Add `memQrag/memory/staleness.py`:
+  - `effective_document_date(document)`: prefers `last_modified_date`, then `created_date`, then
+    `ingested_at` — TXT/Markdown often lack the first two (see "Text Extraction Adapter Behavior").
+  - `count_document_retrievals(conn, document_id)`: how many recorded queries (across every
+    session) retrieved at least one of the document's chunks; a query that hits several of the
+    same document's chunks still counts once.
+  - `is_stale(conn, document, now=None, age_days=90, min_retrieval_count=5)`: `True` only when
+    both conditions hold. Defaults match the tracker wording (90 days) and a small demo-scale
+    frequency bar (`MIN_RETRIEVAL_COUNT = 5`); both are keyword-overridable, which is what
+    "configurable" means in this PR (function parameters, not a config file — no settings system
+    exists yet).
+  - `detect_stale_documents(conn, now=None, ...)`: re-evaluates every document from scratch each
+    call and persists `STALE`/`FRESH`, returning the current stale ids. Recomputing every document
+    (not only currently-FRESH ones) keeps a re-ingested or no-longer-qualifying document from
+    staying stuck `STALE`. Nothing calls this on a schedule yet — same
+    call-functions-directly-until-needed precedent as boost/decay.
+
+Consequences:
+
+- Phase 4's final PR ("Add memory and staleness tests") should stitch memory + staleness together
+  the way Phase 3's final PR stitched retrieval stages — this PR's own unit tests cover the
+  detection module in isolation.
+- Phase 7's `GET /api/documents` and Phase 8's staleness banner read `documents.staleness_status`
+  directly; they should not invent a second source of truth for "is this document stale."
+- Staleness is a review signal, not a retrieval filter — flagged documents still retrieve and
+  answer. Hiding them would violate AGENTS.md's "do not silently suppress stale or contradictory
+  sources."
+- Changing `STALENESS_AGE_DAYS`, `MIN_RETRIEVAL_COUNT`, the both-conditions-required rule, the
+  `effective_document_date` fallback order, or promoting this into a separate review-workflow
+  table later requires a new decision entry.

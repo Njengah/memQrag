@@ -129,6 +129,17 @@ ranking progressively less over time instead of either the full boost or none. S
 Memory Decay For Old, Low-Hit-Rate Memories" in `docs/DECISIONS.md`. Like
 `promote_session_memory_to_long_term()`, nothing calls `apply_memory_decay()` on a schedule yet.
 
+`memQrag/memory/staleness.py` now implements configurable staleness detection for frequently
+retrieved documents: `documents.staleness_status` (`FRESH`/`STALE`, via
+`DocumentStalenessStatus`) was added to the shared SQLite schema;
+`effective_document_date()` / `count_document_retrievals()` / `is_stale()` decide when a document
+is both old (no fresher content in 90+ days, preferring `last_modified_date` then `created_date`
+then `ingested_at`) and frequently retrieved (its chunks appear in at least 5 recorded
+`session_memory` queries across every session); `detect_stale_documents()` recomputes and
+persists that status for every document. Re-ingestion via `save_document()` resets the status to
+`FRESH`. See "Decision: Configurable Staleness Detection For Frequently Retrieved Documents" in
+`docs/DECISIONS.md`. Like boost/decay, nothing calls `detect_stale_documents()` on a schedule yet.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.

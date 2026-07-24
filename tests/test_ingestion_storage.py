@@ -12,12 +12,15 @@ from memQrag.ingestion.chunking import Chunk
 from memQrag.ingestion.contracts import SupportedFileType
 from memQrag.ingestion.extraction import ExtractedDocument
 from memQrag.ingestion.storage import (
+    DocumentStalenessStatus,
     connect,
+    get_all_documents,
     get_chunks_for_document,
     get_document_by_filename,
     persist_ingested_document,
     replace_chunks,
     save_document,
+    update_document_staleness_status,
 )
 
 
@@ -71,6 +74,7 @@ def test_save_document_inserts_new_row_and_returns_id(conn):
     assert record.filename == "policy.txt"
     assert record.file_type == "txt"
     assert isinstance(record.ingested_at, datetime)
+    assert record.staleness_status == DocumentStalenessStatus.FRESH
 
 
 def test_save_document_captures_created_and_modified_dates(conn):
@@ -104,6 +108,38 @@ def test_save_document_upserts_by_filename_reusing_same_id(conn):
 
 def test_get_document_by_filename_returns_none_for_unknown_filename(conn):
     assert get_document_by_filename(conn, "missing.txt") is None
+
+
+def test_update_document_staleness_status_sets_the_status(conn):
+    document_id = save_document(conn, _document("policy.txt"))
+
+    update_document_staleness_status(conn, document_id, DocumentStalenessStatus.STALE)
+
+    record = get_document_by_filename(conn, "policy.txt")
+    assert record.staleness_status == DocumentStalenessStatus.STALE
+
+
+def test_reingesting_a_document_resets_staleness_status_to_fresh(conn):
+    document_id = save_document(conn, _document("policy.txt"))
+    update_document_staleness_status(conn, document_id, DocumentStalenessStatus.STALE)
+
+    save_document(conn, _document("policy.txt"))
+
+    record = get_document_by_filename(conn, "policy.txt")
+    assert record.staleness_status == DocumentStalenessStatus.FRESH
+
+
+def test_get_all_documents_returns_every_document_in_insertion_order(conn):
+    first_id = save_document(conn, _document("a.txt"))
+    second_id = save_document(conn, _document("b.txt"))
+
+    records = get_all_documents(conn)
+
+    assert [record.id for record in records] == [first_id, second_id]
+
+
+def test_get_all_documents_returns_empty_list_when_none_ingested(conn):
+    assert get_all_documents(conn) == []
 
 
 def test_replace_chunks_inserts_chunks_for_document(conn):
