@@ -1130,3 +1130,68 @@ Consequences:
   precedent unless a new decision documents otherwise.
 - Changing `retrieved_chunk_ids`'s storage shape (e.g. a join table instead of a JSON column) or
   `usefulness_flag`'s tri-state semantics later requires a new decision entry.
+
+### Decision: SQLite Schema For Long-Term Memory Records
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The second Phase 4 PR adds the SQLite schema for long-term memory, per `docs/ARCHITECTURE.md`'s
+  planned "Long-term memory" entity (query embedding, best document ids, success count, last
+  used, hit rate, decay weight). Like session memory's schema PR, this is schema plus basic
+  read/write only — memory-informed boosting (Phase 4 PR 3) and decay (Phase 4 PR 4) implement the
+  actual formulas that update these counters over time; this PR just gives them somewhere to live.
+- `query embedding` is only meaningful once something can actually run a similarity search against
+  it, which is Phase 4 PR 3's job, not this one — the same reasoning "Decision: SQLite Persistence
+  For Document And Chunk Metadata" used to defer `Chunk`'s `embedding_reference` column until
+  Phase 2 PR 5 actually implemented ChromaDB persistence. Adding a raw embedding storage column
+  now, before anything reads it, would be exactly the kind of speculative schema that precedent
+  argues against.
+- Unlike `chunks.id` (wholesale deleted and recreated by `replace_chunks()` on re-ingestion, which
+  is why session memory's `retrieved_chunk_ids` is a plain JSON column, not a foreign key —
+  see "SQLite Schema For Session Memory Records"), `documents.id` is stable across re-ingestion
+  (`save_document()` is an upsert keyed on `filename`). A `best_document_ids` foreign key would
+  therefore actually be safe here.
+- `memQrag.memory.session.connect()` already opens the shared database and ensures its own table
+  exists on top of `memQrag.ingestion.storage`'s tables; extending that same chain is simpler than
+  each memory submodule separately re-deriving "how do I get the full shared schema."
+
+Decision:
+
+- Add `memQrag/memory/long_term.py` with a `long_term_memory` table: `id`, `query` (`TEXT` — the
+  representative query text; no embedding column yet, per the context above), `best_document_ids`
+  (`TEXT`, a JSON-encoded list of ints), `success_count` (`INTEGER`, default `0`), `hit_rate`
+  (`REAL`, default `0.0`), `decay_weight` (`REAL`, default `1.0` — full strength until Phase 4 PR 4
+  starts reducing it), and `last_used` (`TEXT`, ISO 8601 UTC).
+- `best_document_ids` is a plain JSON column, not a foreign key, even though `documents.id` is
+  stable enough that a foreign key would be safe — kept consistent with session memory's
+  `retrieved_chunk_ids` shape rather than introducing a second storage convention for "a list of
+  ids" within the same module family. A future decision can revisit this once a real need for
+  referential integrity here (e.g. cascading cleanup when a document is deleted) shows up.
+- `connect(db_path=DEFAULT_DB_PATH)` calls `memQrag.memory.session.connect()` (which itself calls
+  `memQrag.ingestion.storage.connect()`), extending the same chain so one
+  `memory.long_term.connect()` call is sufficient to get the full shared schema
+  (`documents`/`chunks`/`session_memory`/`long_term_memory`) — each new memory submodule builds on
+  the previous one's `connect()` rather than re-deriving it.
+- `record_long_term_memory(conn, query, best_document_ids)` inserts a row with the defaults above
+  and returns its id. `update_long_term_memory(conn, id, *, success_count=None, hit_rate=None,
+  decay_weight=None, last_used=None)` is a plain field setter — omitted keyword arguments keep
+  their current value — deliberately not an "algorithm" (it does not decide *what* the new
+  success_count or hit_rate should be; that policy belongs to Phase 4 PR 3/PR 4). `get_long_term_memory_by_id()`
+  and `get_all_long_term_memory()` (most recently used first) are the read paths; there is no
+  similarity search yet, since that needs the query embedding this PR defers.
+
+Consequences:
+
+- Phase 4 PR 3 must decide, and record here, how an incoming query gets matched against
+  `long_term_memory` rows (this is also where the query-embedding storage question — a new SQLite
+  column, or a separate Chroma collection like chunk vectors — gets decided) and what formula
+  updates `success_count`/`hit_rate` on a match.
+- Phase 4 PR 4 (memory decay) must decide, and record here, the formula that reduces
+  `decay_weight` for memories older than 30 days with a low hit rate.
+- Changing `best_document_ids`'s storage shape, adding the query embedding column/store, or
+  changing what triggers a `long_term_memory` row to be created later all require a new decision
+  entry.
