@@ -608,3 +608,60 @@ Consequences:
   in their own PRs; this PR only owns `documents` and `chunks`.
 - Switching to an ORM, changing the natural key, or changing the re-ingestion (upsert vs.
   versioned history) behavior later requires a new decision entry.
+
+### Decision: ChromaDB Vector Persistence
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fifth Phase 2 PR needs to persist one vector per `Chunk` in ChromaDB, per
+  `docs/PRODUCT_TIMELINE.md`, and satisfy the Phase 2 exit criterion "Vector references resolve
+  back to stored chunk metadata."
+- `docker-compose.yml` already runs a `chroma` service (the official Chroma server image) and
+  already sets `CHROMA_HOST=chroma` / `CHROMA_PORT=8000` on the `api` service for exactly this
+  connection (see "Decision: Docker Compose Topology For The Local Full Stack"), and maps that
+  service to host port `8001`.
+- "Decision: Sentence Embedding Model For Semantic Chunking" already chose `fastembed`'s
+  `BAAI/bge-small-en-v1.5` for chunk-time semantic grouping and flagged that Chroma storage may
+  reuse it "for consistency between chunk-time and query-time embeddings."
+- ChromaDB itself is an explicit, non-swappable project dependency (`docs/PROJECT_BLUEPRINT.md`,
+  `AGENTS.md`), unlike the embedding model or PDF/DOCX libraries, so there is no lighter
+  alternative to evaluate here.
+
+Decision:
+
+- Add `chromadb` (the Python client/server package) as a runtime dependency.
+- `memQrag/ingestion/vector_store.py` reuses `memQrag.ingestion.embeddings.embed_sentences` (the
+  same model used for chunk-time grouping) to compute the vectors stored in Chroma, rather than
+  relying on Chroma's own default embedding function. This keeps chunk boundaries and stored
+  vectors consistent with one embedding model.
+- The Chroma vector id for a chunk is `str(chunk_id)`, where `chunk_id` is that chunk's SQLite
+  `chunks.id` primary key (see "Decision: SQLite Persistence For Document And Chunk Metadata").
+  This directly satisfies "vector references resolve back to stored chunk metadata": given a
+  Chroma id from a retrieval result, `int(vector_id)` is the SQLite chunk id to look up. No new
+  `embedding_reference` column is added to `chunks`, superseding that earlier placeholder note.
+- All chunk fields land in Chroma metadata (`document_id`, `source_document`, `token_count`, and
+  `page_number`/`section_heading` when present) plus the chunk text as the Chroma "document", so a
+  retrieval result is self-contained without a mandatory SQLite round-trip, while `chunk_id` still
+  allows one when full row data (e.g. exact token count) is needed.
+- `get_collection(client=None)` defaults to `chromadb.HttpClient(host=CHROMA_HOST or "localhost",
+  port=CHROMA_PORT or 8001)` (the host-side port from `docker-compose.yml`), using a single fixed
+  collection name (`memqrag_chunks`). All functions accept an already-constructed client/collection
+  (dependency injection), so tests use `chromadb.EphemeralClient()` (a real, in-process Chroma
+  client with no server or network) instead of requiring Docker or a running Chroma server.
+
+Consequences:
+
+- Retrieval (Phase 3) can query `memqrag_chunks` directly and resolve each hit's SQLite chunk row
+  via `int(vector_id)`, without needing a lookup table.
+- Re-ingesting a document currently assigns new SQLite chunk ids (via `replace_chunks`'
+  delete-then-insert), which orphans the old Chroma vectors under the old ids. Cleaning those up
+  is deferred to the ingestion orchestration path (Phase 2 PR 6 or later) that will call both
+  `memQrag.ingestion.storage` and `memQrag.ingestion.vector_store` together; this PR only provides
+  `delete_chunk_vectors()` for that future caller to use, and does not wire the two modules
+  together itself.
+- Switching the embedding model used for storage independently of chunking, changing the vector id
+  scheme, or changing the collection name/count later requires a new decision entry.

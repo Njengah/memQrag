@@ -15,7 +15,12 @@ Implemented so far (Phase 2 of docs/PRODUCT_TIMELINE.md):
   `memQrag.ingestion.embeddings.embed_sentences`;
 - SQLite persistence in `memQrag.ingestion.storage` (`persist_ingested_document`,
   `get_document_by_filename`, `get_chunks_for_document`) for document and
-  chunk metadata.
+  chunk metadata;
+- ChromaDB vector persistence in `memQrag.ingestion.vector_store`
+  (`persist_chunk_vectors`, `get_chunk_vector_ids_for_document`,
+  `delete_chunk_vectors`), using the SQLite chunk id (stringified) as the
+  Chroma vector id.
 
-Persistence into ChromaDB does not exist yet.
+No end-to-end ingestion pipeline wires these modules together yet (see
+Phase 2's remaining tracker item, ingestion tests using fixture documents).
 """
