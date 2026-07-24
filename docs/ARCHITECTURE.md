@@ -45,9 +45,13 @@ Algorithm" in `docs/DECISIONS.md`. `memQrag/ingestion/storage.py` now persists `
 Chunk Metadata" in `docs/DECISIONS.md`. `memQrag/ingestion/vector_store.py` now persists one
 Chroma vector per `Chunk` (embedded via the same `embed_sentences` model used for chunking),
 keyed by `str(chunk_id)` so a vector resolves back to its SQLite chunk row without a separate
-mapping table; see "Decision: ChromaDB Vector Persistence" in `docs/DECISIONS.md`. No
-orchestration pipeline wires `storage.py` and `vector_store.py` together end-to-end yet (Phase 2's
-remaining tracker item).
+mapping table; see "Decision: ChromaDB Vector Persistence" in `docs/DECISIONS.md`.
+`tests/test_ingestion_pipeline.py` now exercises all five modules together end-to-end against a
+small fictional fixture per supported file type, directly asserting all three Phase 2 exit
+criteria; see "Decision: End-To-End Ingestion Fixture Tests" in `docs/DECISIONS.md`. This
+completes Phase 2. No orchestration/pipeline module exists yet — the API layer (Phase 7) will call
+the per-module functions directly, the same way the new tests do, until a real orchestration need
+arises.
 
 The planned runtime shape is:
 
