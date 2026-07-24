@@ -72,7 +72,7 @@ Expected PRs:
 - [x] Implement text extraction adapters with metadata capture for source document, page number, section heading, created date, and last modified date. (#10)
 - [x] Implement semantic chunking using sentence embeddings with merge-below-200-token and split-above-800-token behavior. (#11)
 - [x] Persist chunk metadata in SQLite. (#12)
-- [ ] Persist vector records in ChromaDB.
+- [x] Persist vector records in ChromaDB. (#13)
 - [ ] Add ingestion tests using small fixture documents.
 
 Exit criteria:
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Persist vector records in ChromaDB.
+- [ ] Add ingestion tests using small fixture documents.
