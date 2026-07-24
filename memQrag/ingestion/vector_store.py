@@ -39,13 +39,18 @@ def get_collection(client: chromadb.ClientAPI | None = None) -> Collection:
     Defaults to an HTTP client pointed at the CHROMA_HOST/CHROMA_PORT
     environment variables (set by docker-compose.yml for the api service),
     falling back to localhost:8001 for a non-Docker local `chroma` run.
+
+    Created with `hnsw:space="cosine"` so that `1 - distance` from a query
+    is a cosine similarity, matching the confidence thresholds in
+    docs/ARCHITECTURE.md; see docs/DECISIONS.md ("Dense Retrieval, Query
+    Embedding, And Chroma Distance Space").
     """
     if client is None:
         client = chromadb.HttpClient(
             host=os.environ.get("CHROMA_HOST", DEFAULT_CHROMA_HOST),
             port=int(os.environ.get("CHROMA_PORT", DEFAULT_CHROMA_PORT)),
         )
-    return client.get_or_create_collection(COLLECTION_NAME)
+    return client.get_or_create_collection(COLLECTION_NAME, metadata={"hnsw:space": "cosine"})
 
 
 def persist_chunk_vectors(

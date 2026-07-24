@@ -53,6 +53,16 @@ completes Phase 2. No orchestration/pipeline module exists yet — the API layer
 the per-module functions directly, the same way the new tests do, until a real orchestration need
 arises.
 
+Phase 3 (Hybrid Retrieval Engine) is underway. `memQrag/retrieval/dense.py` now queries the
+`memqrag_chunks` Chroma collection: `dense_retrieve(collection, query, top_k=20)` embeds the query
+with the same `embed_sentences` model used for chunk storage and returns up to `top_k`
+`DenseRetrievalResult`s ranked by cosine similarity, built entirely from Chroma's stored metadata
+and document text. `memQrag/ingestion/vector_store.py`'s `get_collection()` now creates the
+collection with `hnsw:space="cosine"` so a query's `1 - distance` is a real cosine similarity,
+matching the confidence thresholds below; see "Decision: Dense Retrieval, Query Embedding, And
+Chroma Distance Space" in `docs/DECISIONS.md`. Sparse retrieval, fusion, reranking, and confidence
+scoring do not exist yet.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
