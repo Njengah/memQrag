@@ -79,8 +79,12 @@ Reranking Model And Final Top-5 Selection" in `docs/DECISIONS.md`. `memQrag/retr
 now labels each final chunk HIGH/MEDIUM/LOW from `dense_score` using the exact cosine thresholds
 in step 9 below (`confidence_for_dense_score`, `assign_confidence`); a chunk with no `dense_score`
 (sparse-only) is always LOW. See "Decision: Confidence Scoring Thresholds And Sparse-Only
-Handling" in `docs/DECISIONS.md`. This completes Phase 3's retrieval stages; only the cross-module
-retrieval test suite (Phase 3's last tracker item) remains.
+Handling" in `docs/DECISIONS.md`. `tests/test_retrieval_pipeline.py` now exercises all five
+retrieval modules together end-to-end against a small fictional 7-chunk fixture corpus, directly
+asserting both Phase 3 exit criteria; see "Decision: End-To-End Retrieval Fixture Tests" in
+`docs/DECISIONS.md`. This completes Phase 3. No retrieval orchestration/pipeline module exists yet
+— the API layer (Phase 7) will call the per-module functions directly, the same way the new tests
+do, until a real orchestration need arises.
 
 The planned runtime shape is:
 

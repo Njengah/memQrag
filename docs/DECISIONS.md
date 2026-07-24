@@ -1017,3 +1017,56 @@ Consequences:
   confidence is from a list of per-chunk confidence levels (e.g. the top chunk's level, or the
   lowest across all cited chunks) — that policy is out of scope for this PR and is not decided
   here.
+
+### Decision: End-To-End Retrieval Fixture Tests
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The sixth and final Phase 3 PR is "Add retrieval tests for ranking, fusion, reranking, and
+  confidence labels," closing out Phase 3's two exit criteria in `docs/PRODUCT_TIMELINE.md`:
+  retrieval returns ranked chunks with source references and confidence, and tests prove fusion
+  and threshold behavior.
+- Every Phase 3 module (`dense`, `sparse`, `fusion`, `rerank`, `confidence`) already has its own
+  focused unit tests using fakes/mocks for exact, deterministic assertions (dense/sparse ranking,
+  the RRF "two votes beat one" property, rerank truncation, confidence thresholds), but no test
+  exercises them composed together end-to-end against one shared corpus — mirroring the gap
+  `tests/test_ingestion_pipeline.py` closed for Phase 2 (see "Decision: End-To-End Ingestion
+  Fixture Tests").
+- No orchestration/pipeline module exists for retrieval either; per that same precedent, this PR
+  is test-only and calls the existing per-module functions directly in sequence, the same way the
+  eventual API layer (Phase 7) will.
+
+Decision:
+
+- Add `tests/test_retrieval_pipeline.py`. It builds one small, fictional, topically varied
+  7-chunk corpus (a direct near-answer to the test query, a same-meaning-different-words
+  paraphrase with zero lexical overlap, a same-words-different-meaning lexical decoy, and four
+  unrelated filler chunks), persists it into one real Chroma collection with real embeddings, and
+  runs `dense_retrieve` -> `sparse_retrieve` -> `reciprocal_rank_fusion` -> `rerank` ->
+  `assign_confidence` in sequence — real model calls throughout, skipping (not failing) if either
+  model can't be loaded, matching `tests/test_retrieval_dense.py` and `tests/test_retrieval_rerank.py`.
+- The corpus size (7) deliberately exceeds `RERANK_TOP_K` (5) so truncation is actually exercised,
+  and deliberately stays under both `DENSE_TOP_K` and `SPARSE_TOP_K` (20) so `dense_retrieve`
+  returns every chunk — making "fusion does not truncate, reranking does" a directly observable,
+  asserted property rather than an implementation detail taken on faith.
+- All five pipeline stages run once in a module-scoped fixture (`pipeline_output`); the six test
+  functions each assert one property of that shared result (dense/sparse both return candidates,
+  fusion ranks the dual-signal chunk first without truncating, reranking truncates to top-5 with
+  contiguous `final_rank`, every result carries a valid `source_document`, every result's
+  `confidence_level` matches `confidence_for_dense_score(dense_score)` recomputed independently,
+  and the top result is not LOW confidence) rather than re-embedding per test.
+
+Consequences:
+
+- This completes Phase 3's exit criteria and its tracker.
+- The confidence-matches-recomputed-threshold assertion is a wiring-correctness check (proving
+  `assign_confidence` was actually applied to the real pipeline's real scores), not a restatement
+  of `confidence_for_dense_score`'s own unit tests; it will keep passing even if the real
+  embedding model's exact scores drift, which the dense/fusion-ordering assertions in this file
+  are not fully immune to (a materially different embedding or reranker model could change which
+  chunk ends up ranked first) — swapping either model requires re-checking this file, not just
+  the decision entries governing the model choice.
