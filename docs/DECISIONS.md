@@ -1298,3 +1298,79 @@ Consequences:
 - Changing `SIMILARITY_THRESHOLD`, `MERGE_THRESHOLD`, `MIN_HIT_RATE_TO_BOOST`, `BOOST_AMOUNT`, the
   `hit_rate` formula, or the additive (vs. multiplicative) boost mechanism later requires a new
   decision entry.
+
+### Decision: Memory Decay For Old, Low-Hit-Rate Memories
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fourth Phase 4 PR implements `docs/PRODUCT_TIMELINE.md`'s "Implement memory decay for
+  memories older than 30 days with low hit rate" and its exit criterion "Old low-value memory has
+  reduced retrieval influence." `long_term_memory.decay_weight` has existed since "SQLite Schema
+  For Long-Term Memory Records" (default `1.0`, full strength), but nothing has read or written it
+  since — this PR is what actually decides the formula and gives it an effect.
+- "Memory-Informed Retrieval Boosts For Similar Past Queries" explicitly deferred one question to
+  whichever PR implemented decay: "whether `apply_memory_boost()`'s effective boost should scale
+  by `decay_weight`." Not scaling it would leave `decay_weight` a stored-but-inert number, which
+  would not satisfy "reduced retrieval influence" — the whole point of a demo-visible decay signal
+  is that it changes ranking behavior, not just a value in a table.
+- A "multiply the stored `decay_weight` by a factor every time the decay job runs" formula would
+  make the result depend on how often the job happens to run, not on elapsed time — running a
+  decay sweep twice in one day would decay a memory twice as fast as running it once a day. That
+  is not what "older than 30 days" describes, and would make behavior fragile to whatever schedule
+  Phase 6/7 eventually wires up.
+- Decaying to exactly `0.0` would make an old memory indistinguishable from "never boost this,"
+  which reads as suppressing it outright rather than deprioritizing it — the same "do not silently
+  suppress" concern already recorded for stale/contradictory evidence in AGENTS.md's "Do Not"
+  section, applied here to memory instead of documents.
+
+Decision:
+
+- Add `memQrag/memory/decay.py`:
+  - `is_decay_eligible(record, now=None, age_days=30, hit_rate_threshold=0.5)`: `True` once a
+    record is both old (`now - record.last_used >= age_days` — measured from `last_used`, which
+    `remember_query_outcome()` refreshes on every match, so a reused memory never ages out) and
+    low-value (`record.hit_rate < hit_rate_threshold`; a never-matched record's default `hit_rate
+    == 0.0` counts as low-value too). `hit_rate_threshold` defaults to the same `0.5` value as
+    `memQrag.memory.boost.MIN_HIT_RATE_TO_BOOST`, since a memory that would not qualify for
+    boosting is exactly the kind of "low-value" memory decay should target — kept as its own
+    constant rather than importing `boost`'s, so the two stay independently tunable without one
+    change silently changing the other's behavior.
+  - `decay_weight_for(record, now=None, ...)`: **not** eligible -> `1.0`. Eligible -> `decay_factor
+    ** elapsed_periods` (default `decay_factor = 0.5`; `elapsed_periods` is `1 +` how many whole
+    `age_days`-long periods have passed since the record first became eligible), floored at
+    `min_decay_weight = 0.1`. This recomputes from `(now, last_used, hit_rate)` every time and
+    deliberately ignores the currently stored `decay_weight` — making `apply_memory_decay()`
+    idempotent for a given `now` (calling it twice does not decay twice) and self-correcting (a
+    decayed record that gets reused, refreshing `last_used`, is restored to `1.0` on the next
+    sweep rather than staying stuck at its last decayed value), which directly avoids the
+    schedule-dependent formula the context above rules out.
+  - `apply_memory_decay(conn, now=None)`: reads every `long_term_memory` row, writes back
+    `decay_weight_for(record, now)` wherever it differs from the stored value via
+    `long_term.update_long_term_memory()`, and returns the changed ids. Like
+    `promote_session_memory_to_long_term()`, nothing calls this automatically yet — no
+    scheduler/orchestration layer exists (same "call functions directly until a real need arises"
+    precedent as ingestion, retrieval, and `memQrag.memory.boost`).
+- Resolve "Memory-Informed Retrieval Boosts"'s deferred question: `memQrag.memory.boost.apply_memory_boost()`
+  now multiplies its boost by `similar_memory.decay_weight` (`effective_boost = BOOST_AMOUNT *
+  decay_weight`) instead of applying the flat `BOOST_AMOUNT` regardless of age. A fully-decayed
+  memory (`decay_weight` at the `0.1` floor) still nudges its documents slightly rather than being
+  excluded outright, matching the "deprioritize, don't erase" framing above; `find_similar_successful_memory()`'s
+  gating is unchanged, since a near-zero `decay_weight` already makes the resulting boost
+  negligible without needing a second exclusion check.
+
+Consequences:
+
+- `decay_weight` now changes retrieval ranking (via `apply_memory_boost`), not just a stored
+  metric — a future UI/API surface exposing long-term memory (Phase 7/8) should show it as "how
+  much this memory currently influences results," not a raw, static field.
+- Nothing runs `apply_memory_decay()` on a schedule yet; until the Phase 6/7 agent/API layer (or a
+  scheduled job) calls it, `decay_weight` values only update whenever something happens to invoke
+  it directly (e.g. in tests). This mirrors `promote_session_memory_to_long_term()`'s same
+  not-yet-wired status.
+- Changing `DECAY_AGE_DAYS`, `DECAY_HIT_RATE_THRESHOLD`, `DECAY_FACTOR`, `MIN_DECAY_WEIGHT`, the
+  "recompute from scratch" (vs. "multiply the stored value") formula, or how `apply_memory_boost`
+  incorporates `decay_weight` later requires a new decision entry.

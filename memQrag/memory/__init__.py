@@ -21,7 +21,14 @@ Implemented so far (Phase 4 of docs/PRODUCT_TIMELINE.md):
   `BoostedRetrievalResult`), which promotes useful session queries into
   long-term memory, finds a similar-enough previously-successful query for
   an incoming one, and boosts that query's best documents within a fused
-  retrieval ranking.
+  retrieval ranking;
+- memory decay in `memQrag.memory.decay` (`is_decay_eligible`,
+  `decay_weight_for`, `apply_memory_decay`), which recomputes
+  `long_term_memory.decay_weight` for records that are both old (no match
+  in 30+ days) and low-value (low hit rate), so `apply_memory_boost` gives
+  them progressively less retrieval influence over time; a record that
+  gets reused before decaying, or that decays and is later reused, is
+  restored to full strength.
 
-Memory decay and staleness review do not exist yet.
+Staleness review does not exist yet.
 """

@@ -19,7 +19,11 @@ from memQrag.memory.boost import (
     remember_query_outcome,
 )
 from memQrag.memory.long_term import connect as connect_long_term
-from memQrag.memory.long_term import get_all_long_term_memory, get_long_term_memory_by_id
+from memQrag.memory.long_term import (
+    get_all_long_term_memory,
+    get_long_term_memory_by_id,
+    update_long_term_memory,
+)
 from memQrag.memory.session import record_session_query, set_usefulness
 from memQrag.retrieval.fusion import FusedRetrievalResult
 
@@ -260,6 +264,24 @@ def test_apply_memory_boost_boosts_matching_document_and_reorders(conn):
     assert boosted[0].applied_memory_boost == pytest.approx(BOOST_AMOUNT)
     assert boosted[0].rrf_score == pytest.approx(0.03 + BOOST_AMOUNT)
     assert boosted[1].applied_memory_boost == pytest.approx(0.0)
+
+
+def test_apply_memory_boost_scales_by_the_memorys_decay_weight(conn):
+    long_term_memory_id = remember_query_outcome(
+        conn,
+        "What is the return policy?",
+        [20],
+        was_successful=True,
+        query_embedding=_RETURN_POLICY_EMBEDDING,
+    )
+    update_long_term_memory(conn, long_term_memory_id, decay_weight=0.5)
+    similar_memory = get_long_term_memory_by_id(conn, long_term_memory_id)
+
+    fused = [_fused_result(2, document_id=20, rrf_score=0.03)]
+
+    boosted = apply_memory_boost(fused, similar_memory)
+
+    assert boosted[0].applied_memory_boost == pytest.approx(BOOST_AMOUNT * 0.5)
 
 
 def test_apply_memory_boost_leaves_non_matching_documents_unboosted(conn):

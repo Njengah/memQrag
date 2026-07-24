@@ -17,7 +17,8 @@ flow:
   for similar successful queries."
 - `apply_memory_boost()`: flow step 6, "apply memory-informed boosts where
   appropriate," run on `memQrag.retrieval.fusion`'s output before
-  `memQrag.retrieval.rerank`.
+  `memQrag.retrieval.rerank`. Its boost is scaled by the matched memory's
+  `decay_weight` (`memQrag.memory.decay`, Phase 4 PR 4).
 """
 
 from __future__ import annotations
@@ -117,6 +118,13 @@ def apply_memory_boost(
     """Boost every fused result whose document was one of `similar_memory`'s
     best matches, then re-rank by the boosted score.
 
+    The applied boost is scaled by `similar_memory.decay_weight`, so an
+    old, low-hit-rate memory (see `memQrag.memory.decay`) still boosts its
+    documents, but by progressively less over time rather than either the
+    full amount or nothing — see docs/DECISIONS.md ("Memory Decay For Old,
+    Low-Hit-Rate Memories") for why decay scales the boost instead of
+    excluding the memory outright.
+
     Passing `similar_memory=None` (no qualifying past query found by
     `find_similar_successful_memory`) leaves every score unchanged and
     preserves the original fusion order — this is the common case, and
@@ -124,9 +132,10 @@ def apply_memory_boost(
     special-casing it themselves.
     """
     boosted_document_ids = set(similar_memory.best_document_ids) if similar_memory else set()
+    effective_boost = boost_amount * similar_memory.decay_weight if similar_memory else 0.0
 
     def boost_for(result: FusedRetrievalResult) -> float:
-        return boost_amount if result.document_id in boosted_document_ids else 0.0
+        return effective_boost if result.document_id in boosted_document_ids else 0.0
 
     ranked = sorted(
         fused_results, key=lambda result: result.rrf_score + boost_for(result), reverse=True
