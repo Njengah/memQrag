@@ -1070,3 +1070,63 @@ Consequences:
   are not fully immune to (a materially different embedding or reranker model could change which
   chunk ends up ranked first) — swapping either model requires re-checking this file, not just
   the decision entries governing the model choice.
+
+### Decision: SQLite Schema For Session Memory Records
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The first Phase 4 PR adds the SQLite schema for session memory, per `docs/ARCHITECTURE.md`'s
+  planned "Session memory" entity (query, retrieved chunks, usefulness flag, session id,
+  timestamp) and `AGENTS.md`'s boundary that SQLite (not ChromaDB) stores session memory.
+  Memory-informed boosting (Phase 4 PR 3) and the rest of Phase 4 build on this schema; this PR is
+  schema plus basic read/write only, not the boosting logic itself.
+- `memQrag.ingestion.storage` already owns the `documents`/`chunks` tables in the same SQLite
+  database file (`data/memqrag.db`; see "SQLite Persistence For Document And Chunk Metadata").
+  `AGENTS.md`'s boundary describes one SQLite store holding document metadata, session memory,
+  long-term memory, conflict records, and staleness state — one database file, with each module
+  owning its own tables, not one database per module.
+- A session memory row's "retrieved chunks" naturally point at `chunks.id` rows, but
+  `replace_chunks()` deletes and recreates a document's chunk rows wholesale on re-ingestion
+  (fresh autoincrement ids each time), which would silently break a hard foreign key from session
+  memory to `chunks.id` on the very first re-ingestion — turning a persistent memory feature into
+  one that quietly loses history. `memQrag.ingestion.vector_store` already faced an analogous
+  cross-store reference (a Chroma vector id pointing at a SQLite chunk id) and treated it as a
+  plain stored value, not an enforced foreign key.
+
+Decision:
+
+- Add `memQrag/memory/session.py` with a `session_memory` table: `id`, `session_id` (`TEXT`),
+  `query` (`TEXT`), `retrieved_chunk_ids` (`TEXT`, a JSON-encoded list of ints — a plain stored
+  value, not a foreign key, for the re-ingestion reason above; a stale id it points at is a later
+  problem for whatever reads it, not a constraint this table enforces), `usefulness_flag`
+  (`INTEGER`, nullable: `NULL` means no feedback yet, `0`/`1` means not-useful/useful), and
+  `created_at` (`TEXT`, ISO 8601 UTC, matching `documents.ingested_at`'s format).
+  `usefulness_flag` is nullable and set later via a separate call, not at insert time — per
+  `docs/PROJECT_BLUEPRINT.md`'s "Ask a question" workflow ("...persist session feedback"),
+  usefulness is feedback collected after a query's chunks are already retrieved and recorded, not
+  known upfront.
+- `connect(db_path=DEFAULT_DB_PATH)` calls `memQrag.ingestion.storage.connect()` (so the shared
+  database's `documents`/`chunks` tables always exist too) and then this module's own
+  `create_tables()`, so one `memory.session.connect()` call is sufficient to get the full schema
+  needed for memory tests or future callers — no orchestration module needed for this, matching
+  the same "call functions directly until a real need arises" precedent as ingestion and
+  retrieval.
+- `record_session_query(conn, session_id, query, retrieved_chunk_ids)` inserts a row (`created_at`
+  defaults to now) and returns the new row's id; `set_usefulness(conn, session_memory_id, useful)`
+  updates one row's flag; `get_session_memory(conn, session_id)` reads all of one session's rows
+  back, oldest first.
+
+Consequences:
+
+- Phase 4 PR 3 (memory-informed retrieval boosts) reads `session_memory` (likely filtered by
+  `usefulness_flag = 1`) to decide which past queries' chunks to boost; it is not implemented
+  here.
+- Phase 4 PR 2 (long-term memory schema) will face the same "loose reference, not a foreign key"
+  question for whatever document/chunk references it stores, and should follow this same
+  precedent unless a new decision documents otherwise.
+- Changing `retrieved_chunk_ids`'s storage shape (e.g. a join table instead of a JSON column) or
+  `usefulness_flag`'s tri-state semantics later requires a new decision entry.

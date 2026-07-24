@@ -86,6 +86,15 @@ asserting both Phase 3 exit criteria; see "Decision: End-To-End Retrieval Fixtur
 — the API layer (Phase 7) will call the per-module functions directly, the same way the new tests
 do, until a real orchestration need arises.
 
+Phase 4 (Persistent Memory System) is underway. `memQrag/memory/session.py` adds a
+`session_memory` table (`session_id`, `query`, `retrieved_chunk_ids` — a JSON-encoded list, not a
+foreign key, since `chunks.id` rows get replaced wholesale on re-ingestion — `usefulness_flag`,
+`created_at`) to the same shared SQLite database `memQrag/ingestion/storage.py` uses:
+`connect()` opens that shared file and ensures both modules' tables exist.
+`record_session_query()`/`set_usefulness()`/`get_session_memory()` are plain write/read
+functions; no memory-informed boosting logic exists yet. See "Decision: SQLite Schema For
+Session Memory Records" in `docs/DECISIONS.md`.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
