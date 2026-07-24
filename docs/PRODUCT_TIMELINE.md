@@ -92,7 +92,7 @@ Expected PRs:
 - [x] Implement ChromaDB dense retrieval with top-20 results. (#15)
 - [x] Implement BM25 sparse retrieval with top-20 results. (#16)
 - [x] Implement Reciprocal Rank Fusion for dense and sparse results. (#17)
-- [ ] Add cross-encoder reranking of top-20 candidates to final top-5.
+- [x] Add cross-encoder reranking of top-20 candidates to final top-5. (#18)
 - [ ] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds.
 - [ ] Add retrieval tests for ranking, fusion, reranking, and confidence labels.
 
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add cross-encoder reranking of top-20 candidates to final top-5.
+- [ ] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds.
