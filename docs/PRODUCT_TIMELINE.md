@@ -73,7 +73,7 @@ Expected PRs:
 - [x] Implement semantic chunking using sentence embeddings with merge-below-200-token and split-above-800-token behavior. (#11)
 - [x] Persist chunk metadata in SQLite. (#12)
 - [x] Persist vector records in ChromaDB. (#13)
-- [ ] Add ingestion tests using small fixture documents.
+- [x] Add ingestion tests using small fixture documents. (#14)
 
 Exit criteria:
 
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add ingestion tests using small fixture documents.
+- [ ] Implement ChromaDB dense retrieval with top-20 results.
