@@ -89,7 +89,7 @@ Goal:
 
 Expected PRs:
 
-- [ ] Implement ChromaDB dense retrieval with top-20 results.
+- [x] Implement ChromaDB dense retrieval with top-20 results. (#15)
 - [ ] Implement BM25 sparse retrieval with top-20 results.
 - [ ] Implement Reciprocal Rank Fusion for dense and sparse results.
 - [ ] Add cross-encoder reranking of top-20 candidates to final top-5.
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Implement ChromaDB dense retrieval with top-20 results.
+- [ ] Implement BM25 sparse retrieval with top-20 results.
