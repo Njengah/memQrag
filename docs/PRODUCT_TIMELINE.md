@@ -114,7 +114,7 @@ Expected PRs:
 - [x] Implement memory-informed retrieval boosts for similar past queries. (#23)
 - [x] Implement memory decay for memories older than 30 days with low hit rate. (#24)
 - [x] Implement configurable staleness detection for frequently retrieved documents older than 90 days. (#25)
-- [ ] Add memory and staleness tests.
+- [x] Add memory and staleness tests. (#26)
 
 Exit criteria:
 
