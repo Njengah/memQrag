@@ -97,10 +97,25 @@ Session Memory Records" in `docs/DECISIONS.md`. `memQrag/memory/long_term.py` ad
 `long_term_memory` table (`query`, `best_document_ids` — also a JSON-encoded list, kept
 consistent with session memory's shape even though `documents.id` is stable enough that a
 foreign key would be safe here — `success_count`, `hit_rate`, `decay_weight`, `last_used`) to the
-same shared database; `connect()` extends `memory.session.connect()`'s chain. No query-embedding
-column yet (deferred until Phase 4 PR 3 needs similarity search), and `update_long_term_memory()`
-is a plain field setter, not the boosting/decay formulas themselves. See "Decision: SQLite Schema
-For Long-Term Memory Records" in `docs/DECISIONS.md`.
+same shared database; `connect()` extends `memory.session.connect()`'s chain. `long_term_memory`
+now also has a `query_embedding` column (JSON-encoded, added by this PR) and a `match_count`
+column (the `hit_rate` denominator); `update_long_term_memory()` is still a plain field setter, not
+the boosting/decay formulas themselves. See "Decision: SQLite Schema For Long-Term Memory Records"
+in `docs/DECISIONS.md`. `memQrag/memory/boost.py` now implements retrieval flow steps 2 and 6:
+`find_similar_successful_memory()` scores an incoming query's embedding against every
+`long_term_memory` row by brute-force cosine similarity and returns the most similar one that both
+clears a similarity threshold and has a track record of being useful; `apply_memory_boost()` adds a
+fixed boost to the `rrf_score` of every fused result whose document was one of that memory's best
+matches and re-sorts, returning `BoostedRetrievalResult` (the first result type carrying
+`applied_memory_boost`). `remember_query_outcome()` and `promote_session_memory_to_long_term()` are
+the write path: they turn `session_memory` rows with feedback into `long_term_memory` rows,
+resolving `retrieved_chunk_ids` to their owning `document_id`s via a new
+`memQrag.ingestion.storage.get_chunk_by_id()`, and merge near-duplicate queries into one
+reinforced row instead of creating duplicates. See "Decision: Memory-Informed Retrieval Boosts For
+Similar Past Queries" in `docs/DECISIONS.md`. Nothing calls `promote_session_memory_to_long_term()`
+yet, and `apply_memory_boost()` is not yet wired between `retrieval.fusion` and `retrieval.rerank`
+in an actual pipeline — both are deferred to Phase 4's final PR, mirroring how Phase 3 only stitched
+its stages together in its own last PR.
 
 The planned runtime shape is:
 
