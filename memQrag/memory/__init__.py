@@ -36,4 +36,7 @@ Implemented so far (Phase 4 of docs/PRODUCT_TIMELINE.md):
   old (no fresher content in 90+ days) and frequently retrieved (its
   chunks show up often in `session_memory`), persisting the result on
   `documents.staleness_status`.
+
+`tests/test_memory_pipeline.py` stitches these modules together end-to-end
+and asserts Phase 4's three exit criteria. This completes Phase 4.
 """
