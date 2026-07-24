@@ -13,7 +13,11 @@ Implemented so far (Phase 3 of docs/PRODUCT_TIMELINE.md):
   BM25;
 - Reciprocal Rank Fusion in `memQrag.retrieval.fusion`
   (`reciprocal_rank_fusion`, `FusedRetrievalResult`), combining the two
-  ranked lists above into one.
+  ranked lists above into one;
+- cross-encoder reranking in `memQrag.retrieval.rerank` (`rerank`,
+  `RerankedRetrievalResult`), scoring the fused candidates against the
+  query with `memQrag.retrieval.cross_encoder.score_pairs` and truncating
+  to the final top-5.
 
-Reranking and confidence scoring do not exist yet.
+Confidence scoring does not exist yet.
 """

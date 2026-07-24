@@ -909,3 +909,62 @@ Consequences:
   `dense_score` (sparse-only match) once it gets there.
 - Changing the fusion algorithm, the `k` constant's default, or `FusedRetrievalResult`'s shape
   later requires a new decision entry.
+
+### Decision: Cross-Encoder Reranking Model And Final Top-5 Selection
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fourth Phase 3 PR reranks `memQrag.retrieval.fusion.reciprocal_rank_fusion`'s output down
+  to the final top-5 chunks, per `docs/ARCHITECTURE.md`'s retrieval flow steps 7-8 ("Rerank top
+  candidates with a cross-encoder" / "Select final top-5 chunks") and `docs/PRODUCT_TIMELINE.md`.
+- `docs/ARCHITECTURE.md`'s "External Integrations" section requires any reranker choice to be
+  recorded here before implementation.
+- `fastembed` (already a dependency; see "Sentence Embedding Model For Semantic Chunking") added
+  a `fastembed.rerank.cross_encoder.TextCrossEncoder` API that runs ONNX cross-encoder rerankers
+  locally, the same lightweight-dependency shape as the embedding model already in use — no new
+  runtime dependency, no PyTorch. This makes it the natural choice over a separate
+  `sentence-transformers`-based cross-encoder library.
+- Of `TextCrossEncoder`'s supported models, `Xenova/ms-marco-MiniLM-L-6-v2` is the smallest
+  (~80MB) and is the standard MS MARCO-trained MiniLM reranker quoted in fastembed's own README
+  example; larger options (`BAAI/bge-reranker-base` at ~1GB, the `jina-reranker-v2` multilingual
+  model) trade size for capability this project's fictional, English-only demo corpus doesn't
+  need.
+
+Decision:
+
+- Add `memQrag/retrieval/cross_encoder.py`: `score_pairs(query, documents) -> list[float]`,
+  wrapping a module-level `lru_cache`d `TextCrossEncoder(model_name="Xenova/ms-marco-MiniLM-L-6-v2")`,
+  mirroring `memQrag.ingestion.embeddings.embed_sentences`'s shape (plain function, no fastembed
+  types leaking into callers) so `memQrag/retrieval/rerank.py` can depend on a
+  `Callable[[str, Sequence[str]], Sequence[float]]` shape and tests can substitute a fake scorer,
+  the same pattern `memQrag.ingestion.chunking` and `memQrag.retrieval.dense` already use.
+- Scores are raw model logits: unbounded, can be negative, higher means more relevant. They are
+  not a probability or a similarity in `[0, 1]`/`[-1, 1]` like `dense_retrieve`'s cosine score, and
+  must not be compared against it directly (same caution as `sparse_retrieve`'s BM25 score).
+- Add `memQrag/retrieval/rerank.py`: `rerank(fused_results, query, top_k=RERANK_TOP_K) ->
+  list[RerankedRetrievalResult]`, with `RERANK_TOP_K = 5` (the architecture's "final top-5").
+  Scores every input chunk's `text` against `query` with `score_pairs`, then returns the top
+  `top_k` sorted by descending rerank score. Unlike `reciprocal_rank_fusion`, this step *does*
+  truncate its output — this is the "Select final top-5 chunks" step in the retrieval flow, so
+  this is where the funnel narrows for good.
+- `RerankedRetrievalResult` carries forward `chunk_id`, `document_id`, `text`, `source_document`,
+  `page_number`, `section_heading`, `dense_score`, `sparse_rank`, and `fused_rank` from the input
+  `FusedRetrievalResult`, plus `rerank_score` (matching the planned entity's `rerank score` field)
+  and `final_rank` (1-indexed position in the returned top-5; not in the planned entity list, but
+  kept for the same transparency reason `rrf_score` was kept on `FusedRetrievalResult` — a
+  consistent "how did this chunk get here" trail through every stage).
+- An empty `fused_results` input returns `[]` rather than raising, since an empty candidate list
+  is a legitimate (if unlikely) state Phase 3 PR 5's confidence scoring must handle as LOW
+  confidence, not an error condition.
+
+Consequences:
+
+- Phase 3 PR 5 (confidence scoring) consumes `RerankedRetrievalResult` as its final candidate
+  list and assigns HIGH/MEDIUM/LOW confidence, primarily from `dense_score` per the cosine
+  thresholds already documented in `docs/ARCHITECTURE.md`.
+- Swapping the reranker model, changing `RERANK_TOP_K`, or changing `RerankedRetrievalResult`'s
+  shape later requires a new decision entry.
