@@ -665,3 +665,65 @@ Consequences:
   together itself.
 - Switching the embedding model used for storage independently of chunking, changing the vector id
   scheme, or changing the collection name/count later requires a new decision entry.
+
+### Decision: End-To-End Ingestion Fixture Tests
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The sixth and final Phase 2 PR is "Add ingestion tests using small fixture documents," closing
+  out Phase 2's three exit criteria in `docs/PRODUCT_TIMELINE.md`: files ingest successfully,
+  chunk metadata is queryable from SQLite, and vector references resolve back to stored chunk
+  metadata.
+- Every Phase 2 module (`contracts`, `extraction`, `chunking`, `storage`, `vector_store`) already
+  has its own unit tests, but no test exercises them composed together end-to-end; each exit
+  criterion has only been demonstrated per-module, not as a whole pipeline.
+- `docs/DECISIONS.md` ("ChromaDB Vector Persistence") already deferred building an orchestration
+  module until "Phase 2 PR 6 or later"; this PR is that PR, but the tracker item is explicitly
+  about tests, not a new production pipeline module.
+- "Decision: Text Extraction Adapter Behavior" already established the precedent of building PDF/
+  DOCX fixtures in-memory rather than checking in binary files.
+
+Decision:
+
+- No new orchestration/pipeline module is added. `tests/test_ingestion_pipeline.py` calls the
+  existing per-module functions directly, in sequence (`intake_document` -> `extract_text` ->
+  `chunk_document` -> `persist_ingested_document` -> `persist_chunk_vectors`), against one small,
+  fictional fixture document per supported file type (`.txt`, `.md`, `.docx`, `.pdf`), and asserts
+  each of the three exit criteria directly, one test per criterion (parametrized across all four
+  file types).
+- The shared PDF/DOCX in-memory builder functions used by `tests/test_ingestion_extraction.py`
+  move into `tests/fixtures.py` (`build_minimal_pdf`, `build_minimal_docx`) so this new test file
+  reuses them instead of duplicating fixture-construction code. `tests/` has no `__init__.py`, so
+  pytest's default "prepend" import mode makes `tests/` importable as a top-level path; other test
+  files import via `from fixtures import ...`, not `from tests.fixtures import ...`.
+- These tests use the real `embed_sentences` (not the deterministic fake used in
+  `test_ingestion_chunking.py`), since the point is to prove the real wiring works; the fixture
+  that provides it skips (does not fail) if the embedding model cannot be loaded, matching
+  `test_ingestion_embeddings.py`'s existing network-tolerance precedent.
+- `chromadb.EphemeralClient()` instances share underlying state within a process (confirmed by
+  hands-on testing: identical default settings hash to the same cached system), so every test
+  needing a Chroma collection uses a `uuid`-suffixed collection name, not a fixed one, to stay
+  isolated from other tests and other parametrized cases. The same fix was needed retroactively in
+  `tests/test_ingestion_vector_store.py`.
+- Parametrized test IDs are set explicitly via `pytest.param(..., id=...)` rather than left to
+  pytest's default repr-based ID generation. Letting pytest derive an ID from raw DOCX/PDF fixture
+  bytes produced a multi-kilobyte escaped-bytes string that pytest also writes into the
+  `PYTEST_CURRENT_TEST` environment variable per test; on Windows this hit the OS's 32,767-
+  character environment variable limit and crashed every parametrized test's setup/teardown.
+
+Consequences:
+
+- Phase 2's three exit criteria are now each directly, explicitly asserted by a passing test, not
+  just implied by per-module unit tests.
+- Any future ingestion orchestration module (e.g. a single `ingest_document()` entry point used by
+  the Phase 7 `POST /api/ingest` endpoint) can reuse the same call sequence this test file
+  demonstrates, but still does not exist yet.
+- Parametrizing any future test with raw binary fixture bytes must set an explicit `id=`, per the
+  Windows environment-variable-limit failure mode above.
+- Adding a real orchestration/pipeline module, changing the fixture file format coverage, or
+  moving fixtures to a checked-in `sample-data/` directory (reserved for Phase 8 demo content per
+  `AGENTS.md`) requires a new decision entry.
