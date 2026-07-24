@@ -60,8 +60,12 @@ with the same `embed_sentences` model used for chunk storage and returns up to `
 and document text. `memQrag/ingestion/vector_store.py`'s `get_collection()` now creates the
 collection with `hnsw:space="cosine"` so a query's `1 - distance` is a real cosine similarity,
 matching the confidence thresholds below; see "Decision: Dense Retrieval, Query Embedding, And
-Chroma Distance Space" in `docs/DECISIONS.md`. Sparse retrieval, fusion, reranking, and confidence
-scoring do not exist yet.
+Chroma Distance Space" in `docs/DECISIONS.md`. `memQrag/retrieval/sparse.py` now adds BM25 sparse
+retrieval: `sparse_retrieve(collection, query, top_k=20)` reads every chunk's text directly from
+the same `memqrag_chunks` collection, scores it with `rank_bm25`'s `BM25Okapi`, and excludes
+chunks sharing no token with the query (not the same as filtering on a positive score — BM25's IDF
+can go negative for a token common across a small corpus); see "Decision: BM25 Sparse Retrieval"
+in `docs/DECISIONS.md`. Fusion, reranking, and confidence scoring do not exist yet.
 
 The planned runtime shape is:
 
