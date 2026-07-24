@@ -93,7 +93,7 @@ Expected PRs:
 - [x] Implement BM25 sparse retrieval with top-20 results. (#16)
 - [x] Implement Reciprocal Rank Fusion for dense and sparse results. (#17)
 - [x] Add cross-encoder reranking of top-20 candidates to final top-5. (#18)
-- [ ] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds.
+- [x] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds. (#19)
 - [ ] Add retrieval tests for ranking, fusion, reranking, and confidence labels.
 
 Exit criteria:
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add confidence scoring with HIGH, MEDIUM, and LOW thresholds.
+- [ ] Add retrieval tests for ranking, fusion, reranking, and confidence labels.
