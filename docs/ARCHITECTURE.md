@@ -42,7 +42,12 @@ Algorithm" in `docs/DECISIONS.md`. `memQrag/ingestion/storage.py` now persists `
 `Chunk` data into a SQLite `documents`/`chunks` schema (plain `sqlite3`, no ORM), with
 `persist_ingested_document()` as the combined write path and `get_document_by_filename()`/
 `get_chunks_for_document()` as read paths; see "Decision: SQLite Persistence For Document And
-Chunk Metadata" in `docs/DECISIONS.md`. Persistence into ChromaDB does not exist yet.
+Chunk Metadata" in `docs/DECISIONS.md`. `memQrag/ingestion/vector_store.py` now persists one
+Chroma vector per `Chunk` (embedded via the same `embed_sentences` model used for chunking),
+keyed by `str(chunk_id)` so a vector resolves back to its SQLite chunk row without a separate
+mapping table; see "Decision: ChromaDB Vector Persistence" in `docs/DECISIONS.md`. No
+orchestration pipeline wires `storage.py` and `vector_store.py` together end-to-end yet (Phase 2's
+remaining tracker item).
 
 The planned runtime shape is:
 
