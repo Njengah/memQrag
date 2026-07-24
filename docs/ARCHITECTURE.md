@@ -117,6 +117,18 @@ yet, and `apply_memory_boost()` is not yet wired between `retrieval.fusion` and 
 in an actual pipeline — both are deferred to Phase 4's final PR, mirroring how Phase 3 only stitched
 its stages together in its own last PR.
 
+`memQrag/memory/decay.py` now gives `long_term_memory.decay_weight` an actual effect:
+`is_decay_eligible()` flags records that are both old (no match in 30+ days, measured from
+`last_used`) and low-value (low `hit_rate`); `decay_weight_for()` recomputes the weight from
+scratch each time (not eligible -> full strength `1.0`; eligible -> shrinks toward a `0.1` floor
+the longer it stays eligible), so repeated decay sweeps are idempotent and a reused memory is
+restored to full strength rather than staying stuck at a decayed value; `apply_memory_decay()`
+persists that recomputed weight for every record. `memQrag.memory.boost.apply_memory_boost()` now
+multiplies its boost by the matched memory's `decay_weight`, so old, low-value memories influence
+ranking progressively less over time instead of either the full boost or none. See "Decision:
+Memory Decay For Old, Low-Hit-Rate Memories" in `docs/DECISIONS.md`. Like
+`promote_session_memory_to_long_term()`, nothing calls `apply_memory_decay()` on a schedule yet.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
