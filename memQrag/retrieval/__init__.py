@@ -17,7 +17,12 @@ Implemented so far (Phase 3 of docs/PRODUCT_TIMELINE.md):
 - cross-encoder reranking in `memQrag.retrieval.rerank` (`rerank`,
   `RerankedRetrievalResult`), scoring the fused candidates against the
   query with `memQrag.retrieval.cross_encoder.score_pairs` and truncating
-  to the final top-5.
+  to the final top-5;
+- confidence scoring in `memQrag.retrieval.confidence` (`assign_confidence`,
+  `confidence_for_dense_score`, `ConfidenceLevel`, `ScoredRetrievalResult`),
+  labeling each final chunk HIGH/MEDIUM/LOW from its dense cosine
+  similarity.
 
-Confidence scoring does not exist yet.
+This completes Phase 3's retrieval stages; only the cross-module retrieval
+test suite (Phase 3's last tracker item) remains.
 """

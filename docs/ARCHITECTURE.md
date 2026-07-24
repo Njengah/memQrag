@@ -75,8 +75,12 @@ scores the fused candidates against the query with a cross-encoder
 (`memQrag/retrieval/cross_encoder.py`'s `score_pairs`, wrapping fastembed's
 `Xenova/ms-marco-MiniLM-L-6-v2` ONNX model) and truncates to the final top-5 — the only step in
 this flow that truncates its output, per the retrieval flow below. See "Decision: Cross-Encoder
-Reranking Model And Final Top-5 Selection" in `docs/DECISIONS.md`. Confidence scoring does not
-exist yet.
+Reranking Model And Final Top-5 Selection" in `docs/DECISIONS.md`. `memQrag/retrieval/confidence.py`
+now labels each final chunk HIGH/MEDIUM/LOW from `dense_score` using the exact cosine thresholds
+in step 9 below (`confidence_for_dense_score`, `assign_confidence`); a chunk with no `dense_score`
+(sparse-only) is always LOW. See "Decision: Confidence Scoring Thresholds And Sparse-Only
+Handling" in `docs/DECISIONS.md`. This completes Phase 3's retrieval stages; only the cross-module
+retrieval test suite (Phase 3's last tracker item) remains.
 
 The planned runtime shape is:
 
