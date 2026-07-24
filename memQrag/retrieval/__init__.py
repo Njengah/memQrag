@@ -10,7 +10,10 @@ Implemented so far (Phase 3 of docs/PRODUCT_TIMELINE.md):
   by cosine similarity;
 - sparse retrieval in `memQrag.retrieval.sparse` (`sparse_retrieve`,
   `SparseRetrievalResult`), scoring the same collection's chunk text with
-  BM25.
+  BM25;
+- Reciprocal Rank Fusion in `memQrag.retrieval.fusion`
+  (`reciprocal_rank_fusion`, `FusedRetrievalResult`), combining the two
+  ranked lists above into one.
 
-Fusion, reranking, and confidence scoring do not exist yet.
+Reranking and confidence scoring do not exist yet.
 """

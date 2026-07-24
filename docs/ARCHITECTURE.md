@@ -65,7 +65,13 @@ retrieval: `sparse_retrieve(collection, query, top_k=20)` reads every chunk's te
 the same `memqrag_chunks` collection, scores it with `rank_bm25`'s `BM25Okapi`, and excludes
 chunks sharing no token with the query (not the same as filtering on a positive score — BM25's IDF
 can go negative for a token common across a small corpus); see "Decision: BM25 Sparse Retrieval"
-in `docs/DECISIONS.md`. Fusion, reranking, and confidence scoring do not exist yet.
+in `docs/DECISIONS.md`. `memQrag/retrieval/fusion.py` now combines both ranked lists with
+Reciprocal Rank Fusion (`reciprocal_rank_fusion`, `k=60`): each chunk's RRF score sums `1 / (k +
+rank)` over every input ranking it appears in, so a bounded cosine similarity and an unbounded
+BM25 score never need to be normalized against each other; the result carries `dense_score` when
+present, `sparse_rank` when present, and the fused rank/score. See "Decision: Reciprocal Rank
+Fusion For Dense And Sparse Results" in `docs/DECISIONS.md`. Reranking and confidence scoring do
+not exist yet.
 
 The planned runtime shape is:
 

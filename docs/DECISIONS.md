@@ -848,3 +848,64 @@ Consequences:
   which requires a new decision entry.
 - Adding stemming/stopword removal, switching to an inverted-index-backed BM25 library, or
   changing what counts as "no match" later requires a new decision entry.
+
+### Decision: Reciprocal Rank Fusion For Dense And Sparse Results
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The third Phase 3 PR fuses `memQrag.retrieval.dense.dense_retrieve` and
+  `memQrag.retrieval.sparse.sparse_retrieve`'s ranked lists into one, per
+  `docs/ARCHITECTURE.md`'s retrieval flow step 5 ("Fuse both rankings with Reciprocal Rank
+  Fusion") and `docs/PRODUCT_TIMELINE.md`.
+- `docs/ARCHITECTURE.md`'s planned "Retrieval result" entity lists `dense score` and `sparse
+  rank` (not `sparse score`) as the fields it expects to carry forward, which lines up with a
+  real constraint: a cosine similarity (`DenseRetrievalResult.score`) is bounded and directly
+  meaningful (it already feeds the planned confidence thresholds in Phase 3 PR 5), while a raw
+  BM25 score (`SparseRetrievalResult.score`) is unbounded and corpus-size-dependent, so only its
+  *rank* is meaningful outside its own retrieval call.
+- Reciprocal Rank Fusion (Cormack, Clarke & Buettcher, 2009) is the standard choice here
+  precisely because it fuses by rank position, not by raw score, so two rankings on incomparable
+  scales (cosine similarity vs. BM25) never need to be normalized against each other.
+- The paper (and widely-adopted implementations — Elasticsearch's and OpenSearch's RRF both
+  default `rank_constant` to this same value) uses a smoothing constant `k = 60`, chosen from a
+  pilot study; the paper notes the optimum is flat across `k ∈ [20, 100]`.
+
+Decision:
+
+- Add `memQrag/retrieval/fusion.py`: `reciprocal_rank_fusion(dense_results, sparse_results, k=RRF_K)
+  -> list[FusedRetrievalResult]`, with `RRF_K = 60`.
+- RRF score for a chunk = `sum(1 / (k + rank))` over every input ranking that contains it, where
+  `rank` is that ranking's 1-indexed position for the chunk. A chunk appearing in only one of the
+  two rankings still gets fused, using only that ranking's contribution (this is exactly the
+  "reciprocal rank fusion outperforms individual methods" property from the paper, not a gap to
+  fill in).
+- `FusedRetrievalResult` carries `chunk_id`, `document_id`, `text`, `source_document`,
+  `page_number`, `section_heading` (from whichever input result the chunk was found in; identical
+  either way since both point at the same stored chunk), `dense_score` (`float | None`, present
+  only if the chunk appeared in `dense_results`), `sparse_rank` (`int | None`, present only if the
+  chunk appeared in `sparse_results`), `fused_rank` (1-indexed final position), and `rrf_score`
+  (the raw fused score that produced `fused_rank`). `rrf_score` is not in `docs/ARCHITECTURE.md`'s
+  planned entity list, but is kept for transparency/debuggability (per `AGENTS.md`'s "do not hide
+  low confidence retrieval behind confident answer wording" spirit) and because it costs nothing
+  to carry.
+- This function does not truncate its output to any particular size; it returns every chunk that
+  appeared in either input ranking (a bounded union of at most `len(dense_results) +
+  len(sparse_results)`, deduplicated by `chunk_id`), fully ranked. Per the retrieval flow, Phase 3
+  PR 4 (cross-encoder reranking) is responsible for narrowing "top-20 candidates" down further,
+  and PR 5 selects the "final top-5"; fusion itself should not pre-empt that.
+- Tie-breaking for equal RRF scores (e.g. two sparse-only chunks that never overlap with any dense
+  result) falls out of a stable sort over dense-then-sparse insertion order; this is deterministic
+  but not a meaningful ranking signal on its own.
+
+Consequences:
+
+- Phase 3 PR 4 (reranking) and PR 5 (confidence scoring) consume `FusedRetrievalResult` as their
+  input candidate list; PR 5 in particular can use `dense_score` directly against the cosine
+  thresholds when present, and must decide separately how to handle a chunk that has no
+  `dense_score` (sparse-only match) once it gets there.
+- Changing the fusion algorithm, the `k` constant's default, or `FusedRetrievalResult`'s shape
+  later requires a new decision entry.
