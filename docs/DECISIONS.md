@@ -727,3 +727,60 @@ Consequences:
 - Adding a real orchestration/pipeline module, changing the fixture file format coverage, or
   moving fixtures to a checked-in `sample-data/` directory (reserved for Phase 8 demo content per
   `AGENTS.md`) requires a new decision entry.
+
+### Decision: Dense Retrieval, Query Embedding, And Chroma Distance Space
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The first Phase 3 PR needs to query ChromaDB for the top-20 chunks nearest a user's query, per
+  `docs/PRODUCT_TIMELINE.md` and `docs/ARCHITECTURE.md`'s retrieval flow step 3.
+- "Decision: Sentence Embedding Model For Semantic Chunking" explicitly deferred the query-time
+  embedding model choice to this PR, noting retrieval "may reuse `bge-small-en-v1.5` for
+  consistency between chunk-time and query-time embeddings, or choose differently, but must record
+  that choice explicitly when made."
+- `docs/ARCHITECTURE.md`'s planned confidence scoring (step 9, Phase 3 PR 5) is defined in terms
+  of *cosine similarity* thresholds (HIGH > 0.85, MEDIUM 0.65-0.85, LOW < 0.65), but
+  "Decision: ChromaDB Vector Persistence" created the `memqrag_chunks` collection without setting
+  an explicit distance space, so it silently used Chroma's default (squared L2, not cosine) —
+  confirmed by direct testing. Left uncorrected, later confidence-scoring code would be comparing
+  L2 distances against cosine thresholds.
+- Confirmed by direct testing that `fastembed`'s `BAAI/bge-small-en-v1.5` output vectors are
+  already L2-normalized (norm ≈ 1.0), so switching the collection to cosine space needs no vector
+  changes, only the collection's `hnsw:space` metadata.
+
+Decision:
+
+- Query embedding reuses `memQrag.ingestion.embeddings.embed_sentences` — the same model used to
+  embed stored chunk vectors (`memQrag/ingestion/vector_store.py`). Query and chunk vectors must
+  share one embedding space for similarity to be meaningful; this was not a real trade-off to
+  re-litigate, just the explicit record the earlier decision asked for.
+- `memQrag/ingestion/vector_store.py`'s `get_collection()` now creates `memqrag_chunks` with
+  `metadata={"hnsw:space": "cosine"}`, so `1 - distance` from a Chroma query is a cosine
+  similarity in `[-1, 1]`, matching the confidence thresholds' units ahead of Phase 3 PR 5. This
+  amends "Decision: ChromaDB Vector Persistence" (which did not specify a distance space) rather
+  than superseding it; no other behavior from that decision changes.
+- Add `memQrag/retrieval/dense.py`: `dense_retrieve(collection, query, top_k=DENSE_TOP_K) ->
+  list[DenseRetrievalResult]`, where `DENSE_TOP_K = 20`. `DenseRetrievalResult` is a frozen
+  dataclass (`chunk_id`, `document_id`, `score`, `text`, `source_document`, `page_number`,
+  `section_heading`) built entirely from Chroma's own stored metadata/document text — no mandatory
+  SQLite round-trip to return a usable result, consistent with "Decision: ChromaDB Vector
+  Persistence."
+- `dense_retrieve` raises `ValueError` for a blank query rather than embedding and querying with
+  empty text.
+
+Consequences:
+
+- Phase 3 PR 2 (BM25 sparse retrieval) and PR 3 (Reciprocal Rank Fusion) can treat
+  `DenseRetrievalResult` as one of the two ranked candidate lists to fuse.
+- Phase 3 PR 5 (confidence scoring) can use `DenseRetrievalResult.score` directly as a cosine
+  similarity against the HIGH/MEDIUM/LOW thresholds, without re-deriving distance-to-similarity
+  conversion.
+- Any existing `memqrag_chunks` collection created before this PR (there is no live deployment
+  yet, so none exists) would need to be dropped and re-created to pick up the new distance space;
+  this is a no-op in practice since Phase 2 PR 5 was never deployed with real traffic.
+- Switching the query embedding model independently of the storage embedding model, or changing
+  the distance space again, requires a new decision entry.
