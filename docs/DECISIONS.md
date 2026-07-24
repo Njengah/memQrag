@@ -784,3 +784,67 @@ Consequences:
   this is a no-op in practice since Phase 2 PR 5 was never deployed with real traffic.
 - Switching the query embedding model independently of the storage embedding model, or changing
   the distance space again, requires a new decision entry.
+
+### Decision: BM25 Sparse Retrieval
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The second Phase 3 PR needs BM25 sparse retrieval for the top-20 candidates, per
+  `docs/PRODUCT_TIMELINE.md` and `docs/ARCHITECTURE.md`'s retrieval flow step 4, to later fuse
+  with dense retrieval (`memQrag/retrieval/dense.py`) via Reciprocal Rank Fusion (Phase 3 PR 3).
+- Unlike dense retrieval, BM25 is not backed by a persistent, incrementally-queryable index in
+  this project; a BM25 corpus must be built from the full set of chunk texts before scoring.
+- "Decision: ChromaDB Vector Persistence" already stores every chunk's full text and metadata
+  (`document_id`, `source_document`, `page_number`, `section_heading`) in the `memqrag_chunks`
+  Chroma collection, self-contained without a mandatory SQLite round-trip; `dense_retrieve` reads
+  that same collection.
+- The project has consistently preferred small, well-known libraries over reinventing standard
+  algorithms (`pypdf`, `python-docx`, `fastembed`) when the library is lightweight.
+
+Decision:
+
+- Add [`rank-bm25`](https://github.com/dorianbrown/rank_bm25) (`BM25Okapi`) as a runtime
+  dependency. It is a single-module, pure-Python implementation whose only dependency is `numpy`,
+  which is already installed transitively via `chromadb`, so this adds no meaningful new
+  dependency weight.
+- `memQrag/retrieval/sparse.py`'s `sparse_retrieve(collection, query, top_k=SPARSE_TOP_K)`
+  (`SPARSE_TOP_K = 20`, matching `DENSE_TOP_K`) builds its BM25 corpus by reading every chunk's
+  text and metadata directly from the same `memqrag_chunks` Chroma collection via
+  `collection.get()` (confirmed to return the full collection with no hidden page-size limit),
+  rather than adding a new SQLite read path. This keeps dense and sparse retrieval symmetric: both
+  take a Chroma collection and return self-contained results.
+- Tokenization is a simple lowercase word-boundary regex (`\w+`), with no stemming, lemmatization,
+  or stopword removal in this PR — the same "lightweight heuristic, no NLP dependency" choice
+  already made for sentence splitting in "Decision: Semantic Chunking Algorithm." Revisit with a
+  new decision if a demo document's retrieval quality actually needs it.
+- Chunks sharing no token with the query are excluded from the results, even though
+  `BM25Okapi.get_scores()` returns a score for every chunk in the corpus (scoring the whole
+  corpus, rather than an inverted index, is an implementation detail; a chunk sharing no terms
+  with the query is not a real sparse match and should not occupy one of the top-20 slots). This
+  overlap check is a separate token-set intersection, **not** a `score > 0` filter: BM25's IDF
+  term goes negative for a token that appears in every document in the corpus (confirmed by
+  direct testing with a single-document corpus), which is a real possibility for a small demo
+  corpus, so a genuinely overlapping chunk can still score negative.
+- `SparseRetrievalResult` mirrors `DenseRetrievalResult`'s shape (`chunk_id`, `document_id`,
+  `score`, `text`, `source_document`, `page_number`, `section_heading`), but `score` stays a raw
+  BM25 score (unbounded, corpus-size-dependent), not normalized to `[0, 1]` or made comparable to
+  cosine similarity. Reciprocal Rank Fusion (Phase 3 PR 3) fuses by *rank position* per
+  `docs/ARCHITECTURE.md` ("Fuse both rankings with Reciprocal Rank Fusion"), not by raw score, so
+  the two scales never need to be reconciled.
+- Empty-collection and blank-query handling mirrors `dense_retrieve`: an empty corpus returns `[]`
+  immediately (avoiding `BM25Okapi` on zero documents), and a blank query raises `ValueError`.
+
+Consequences:
+
+- Phase 3 PR 3 (Reciprocal Rank Fusion) consumes `DenseRetrievalResult` and `SparseRetrievalResult`
+  as two same-shaped-but-differently-scaled ranked lists, fusing by rank rather than score.
+- `sparse_retrieve` re-scans and re-tokenizes the entire collection on every call (no cached BM25
+  index across calls). This is an accepted simplicity/performance trade-off for a local demo-sized
+  corpus; a real deployment with a large corpus would need a persistent inverted index instead,
+  which requires a new decision entry.
+- Adding stemming/stopword removal, switching to an inverted-index-backed BM25 library, or
+  changing what counts as "no match" later requires a new decision entry.
