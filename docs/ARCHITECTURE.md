@@ -70,8 +70,13 @@ Reciprocal Rank Fusion (`reciprocal_rank_fusion`, `k=60`): each chunk's RRF scor
 rank)` over every input ranking it appears in, so a bounded cosine similarity and an unbounded
 BM25 score never need to be normalized against each other; the result carries `dense_score` when
 present, `sparse_rank` when present, and the fused rank/score. See "Decision: Reciprocal Rank
-Fusion For Dense And Sparse Results" in `docs/DECISIONS.md`. Reranking and confidence scoring do
-not exist yet.
+Fusion For Dense And Sparse Results" in `docs/DECISIONS.md`. `memQrag/retrieval/rerank.py` now
+scores the fused candidates against the query with a cross-encoder
+(`memQrag/retrieval/cross_encoder.py`'s `score_pairs`, wrapping fastembed's
+`Xenova/ms-marco-MiniLM-L-6-v2` ONNX model) and truncates to the final top-5 — the only step in
+this flow that truncates its output, per the retrieval flow below. See "Decision: Cross-Encoder
+Reranking Model And Final Top-5 Selection" in `docs/DECISIONS.md`. Confidence scoring does not
+exist yet.
 
 The planned runtime shape is:
 
