@@ -109,7 +109,7 @@ Goal:
 
 Expected PRs:
 
-- [ ] Add SQLite schema for session memory records.
+- [x] Add SQLite schema for session memory records. (#21)
 - [ ] Add SQLite schema for long-term memory records.
 - [ ] Implement memory-informed retrieval boosts for similar past queries.
 - [ ] Implement memory decay for memories older than 30 days with low hit rate.
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add SQLite schema for session memory records.
+- [ ] Add SQLite schema for long-term memory records.
