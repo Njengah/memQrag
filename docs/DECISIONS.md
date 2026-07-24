@@ -968,3 +968,52 @@ Consequences:
   thresholds already documented in `docs/ARCHITECTURE.md`.
 - Swapping the reranker model, changing `RERANK_TOP_K`, or changing `RerankedRetrievalResult`'s
   shape later requires a new decision entry.
+
+### Decision: Confidence Scoring Thresholds And Sparse-Only Handling
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The fifth Phase 3 PR assigns a confidence level to each of
+  `memQrag.retrieval.rerank.rerank`'s final top-5 chunks, per `docs/ARCHITECTURE.md`'s retrieval
+  flow step 9, which already specifies exact cosine similarity thresholds (HIGH greater than
+  0.85, MEDIUM 0.65 to 0.85, LOW less than 0.65) — this PR implements those, it does not choose
+  them.
+- `RerankedRetrievalResult.dense_score` is `None` for a chunk that only appeared in the sparse
+  ranking (see "Reciprocal Rank Fusion For Dense And Sparse Results"). The cross-encoder's
+  `rerank_score` is not a substitute: it is a raw, unbounded logit with no defined relationship
+  to the documented cosine thresholds, so using it to backfill a missing `dense_score` would
+  invent a threshold behavior nowhere documented.
+- `AGENTS.md`'s "Do not hide low confidence retrieval behind confident answer wording" rules out
+  defaulting a sparse-only chunk to MEDIUM/HIGH just because it survived fusion and reranking —
+  surviving those steps is not the same evidence as a high cosine similarity.
+
+Decision:
+
+- Add `memQrag/retrieval/confidence.py`: `ConfidenceLevel(str, Enum)` (`HIGH`, `MEDIUM`, `LOW`,
+  matching the `SupportedFileType(str, Enum)` pattern in `memQrag.ingestion.contracts`),
+  `HIGH_CONFIDENCE_THRESHOLD = 0.85`, `MEDIUM_CONFIDENCE_THRESHOLD = 0.65`.
+- `confidence_for_dense_score(dense_score: float | None) -> ConfidenceLevel` is the pure
+  threshold function: `> 0.85` is HIGH, `0.65` to `0.85` inclusive is MEDIUM, below `0.65` is LOW.
+  A `None` score (sparse-only chunk) is always LOW, per the context above.
+- `assign_confidence(reranked_results) -> list[ScoredRetrievalResult]` attaches a
+  `confidence_level` to every input chunk, in order, with no filtering or reordering —
+  confidence is a label, not another ranking signal at this stage.
+- `ScoredRetrievalResult` carries every `RerankedRetrievalResult` field forward plus
+  `confidence_level`, and is the first type whose field list matches
+  `docs/ARCHITECTURE.md`'s planned "Retrieval result" entity almost exactly (still missing only
+  `applied memory boost`, which does not exist until Phase 4/5).
+
+Consequences:
+
+- Phase 4/5's memory-informed boosting, once implemented, either adds an `applied_memory_boost`
+  field to a later result type or feeds back earlier in the flow (before reranking, per the
+  retrieval flow's step ordering) — either way, changing where boosting plugs in relative to this
+  PR's confidence assignment requires a new decision entry.
+- The response synthesis layer (Phase 6) is responsible for deciding what an *answer's* overall
+  confidence is from a list of per-chunk confidence levels (e.g. the top chunk's level, or the
+  lowest across all cited chunks) — that policy is out of scope for this PR and is not decided
+  here.
