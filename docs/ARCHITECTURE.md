@@ -38,7 +38,11 @@ now turns an `ExtractedDocument` into `Chunk`s: sentences within each segment ar
 `memQrag/ingestion/embeddings.py`, using `fastembed`'s `BAAI/bge-small-en-v1.5` model) and grouped
 at semantic-similarity breakpoints, then merged below 200 tokens and split above 800 tokens; see
 "Decision: Sentence Embedding Model For Semantic Chunking" and "Decision: Semantic Chunking
-Algorithm" in `docs/DECISIONS.md`. Persistence into SQLite and ChromaDB does not exist yet.
+Algorithm" in `docs/DECISIONS.md`. `memQrag/ingestion/storage.py` now persists `ExtractedDocument`/
+`Chunk` data into a SQLite `documents`/`chunks` schema (plain `sqlite3`, no ORM), with
+`persist_ingested_document()` as the combined write path and `get_document_by_filename()`/
+`get_chunks_for_document()` as read paths; see "Decision: SQLite Persistence For Document And
+Chunk Metadata" in `docs/DECISIONS.md`. Persistence into ChromaDB does not exist yet.
 
 The planned runtime shape is:
 

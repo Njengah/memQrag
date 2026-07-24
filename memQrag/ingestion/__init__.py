@@ -12,7 +12,10 @@ Implemented so far (Phase 2 of docs/PRODUCT_TIMELINE.md):
   TXT, and Markdown;
 - semantic chunking in `memQrag.ingestion.chunking` (`chunk_document`,
   `Chunk`), backed by sentence embeddings from
-  `memQrag.ingestion.embeddings.embed_sentences`.
+  `memQrag.ingestion.embeddings.embed_sentences`;
+- SQLite persistence in `memQrag.ingestion.storage` (`persist_ingested_document`,
+  `get_document_by_filename`, `get_chunks_for_document`) for document and
+  chunk metadata.
 
-Persistence into SQLite and ChromaDB does not exist yet.
+Persistence into ChromaDB does not exist yet.
 """
