@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add memory and staleness tests.
+- [ ] Define contradiction record model and SQLite persistence.
