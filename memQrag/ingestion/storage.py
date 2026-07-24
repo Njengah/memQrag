@@ -156,6 +156,16 @@ def get_chunks_for_document(conn: sqlite3.Connection, document_id: int) -> list[
     return [_row_to_chunk(row) for row in rows]
 
 
+def get_chunk_by_id(conn: sqlite3.Connection, chunk_id: int) -> ChunkRecord | None:
+    """Return one chunk by id, or `None` if it doesn't exist.
+
+    Used by `memQrag.memory.boost` to resolve `session_memory`'s
+    `retrieved_chunk_ids` back to the document ids long-term memory tracks.
+    """
+    row = conn.execute("SELECT * FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    return _row_to_chunk(row) if row else None
+
+
 def _isoformat(value: datetime | None) -> str | None:
     return value.isoformat() if value is not None else None
 

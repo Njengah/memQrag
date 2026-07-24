@@ -1195,3 +1195,106 @@ Consequences:
 - Changing `best_document_ids`'s storage shape, adding the query embedding column/store, or
   changing what triggers a `long_term_memory` row to be created later all require a new decision
   entry.
+
+### Decision: Memory-Informed Retrieval Boosts For Similar Past Queries
+
+Date: 2026-07-24
+
+Status: accepted.
+
+Context:
+
+- The third Phase 4 PR implements `docs/ARCHITECTURE.md`'s retrieval flow steps 2 ("Check
+  long-term memory for similar successful queries") and 6 ("Apply memory-informed boosts where
+  appropriate"). "SQLite Schema For Long-Term Memory Records" deferred two questions to this PR:
+  where the query embedding lives, and what formula updates `success_count`/`hit_rate` on a
+  match.
+- "SQLite Schema For Session Memory Records" anticipated this PR reading `session_memory`
+  (filtered by `usefulness_flag`) to decide what to boost — but `session_memory` only stores
+  `retrieved_chunk_ids`, not document ids, and chunk ids are volatile across re-ingestion (the
+  reason that table isn't a foreign key). Long-term memory needs to boost by document id (fusion's
+  results carry `document_id`, and `chunks.id` rows for the same document already get replaced on
+  re-ingestion), so something has to resolve chunk id -> document id at promotion time, not at
+  boost time.
+- `hit_rate` cannot be a meaningful ratio without a denominator (how many times this memory was
+  matched), and no such column exists in the planned "Long-term memory" entity in
+  `docs/ARCHITECTURE.md` (query embedding, best document ids, success count, last used, hit rate,
+  decay weight). This is an implementation necessity, not a new planned-entity concept, and is
+  recorded here per AGENTS.md's "update docs/DECISIONS.md when a meaningful ... decision is made."
+- The long-term memory corpus is expected to stay small relative to the chunk corpus (one row per
+  distinct remembered query pattern, not per document/chunk), so it does not need ChromaDB's
+  ANN index the way chunk vectors do — brute-force cosine similarity over every
+  `long_term_memory` row is fast enough at this scale.
+
+Decision:
+
+- Store each long-term memory row's embedding as a new `query_embedding` column (`TEXT`,
+  JSON-encoded `list[float]`, `NOT NULL`) on the existing `long_term_memory` table, not in a
+  second Chroma collection. This keeps the "small, non-ANN, per-query-pattern" store described
+  above inside the same SQLite file AGENTS.md already scopes long-term memory to, rather than
+  introducing a second vector-store category alongside "ChromaDB stores vector embeddings and
+  chunk references" (that boundary is specifically about chunk references).
+- Add a `match_count` column (`INTEGER`, default `0`) alongside `success_count`, so
+  `hit_rate = success_count / match_count` is a real ratio, not an unbacked field. Both are
+  updated together by `memQrag/memory/boost.py`'s `remember_query_outcome()`.
+- There is no migration framework yet (out of scope until a real deployment need arises). Adding
+  columns to an existing table only affects local, gitignored `data/memqrag.db` files, which have
+  no production data yet; a developer with a pre-existing local database from before this PR must
+  delete that file to pick up the new columns. This is acceptable for now and should be revisited
+  once real deployed data exists.
+- Add `memQrag/memory/boost.py`:
+  - `remember_query_outcome(conn, query, best_document_ids, was_successful, *, query_embedding=None, merge_threshold=0.95)`
+    is the write path. It embeds `query` (or reuses a passed-in `query_embedding`, to avoid a
+    redundant `embed_sentences` call when a caller already has one — e.g. the same query
+    `dense_retrieve` embeds), and either reinforces the most similar existing record whose cosine
+    similarity is `>= merge_threshold` (so "What is the return policy?" and "What's your return
+    policy?" accumulate into one row instead of fragmenting) or creates a new one via
+    `long_term.record_long_term_memory()`. `match_count` increments by 1 either way;
+    `success_count` increments only `if was_successful`; `hit_rate` is recomputed as their ratio.
+    `merge_threshold` (0.95) is deliberately much stricter than `SIMILARITY_THRESHOLD` below,
+    since merging conflates two records permanently while boosting only affects one query's
+    ranking.
+  - `find_similar_successful_memory(conn, query, *, query_embedding=None, similarity_threshold=0.90, min_hit_rate=0.5)`
+    is the read path for flow step 2: the most similar record with `match_count > 0` and
+    `hit_rate >= min_hit_rate`, or `None`. `similarity_threshold` (0.90) is set higher than dense
+    retrieval's own HIGH-confidence cosine threshold (0.85), since this boosts based on a
+    *different* query's historical outcome rather than checking the current query's relevance
+    directly — the bar for "similar enough to trust" should be stricter than the bar for "this
+    chunk itself looks relevant."
+  - `apply_memory_boost(fused_results, similar_memory, boost_amount=0.05)` is flow step 6: adds
+    `boost_amount` to the `rrf_score` of every `FusedRetrievalResult` whose `document_id` is in
+    `similar_memory.best_document_ids` (or leaves every score unchanged if `similar_memory` is
+    `None`), then re-sorts, returning `BoostedRetrievalResult` — the first result type to carry
+    `applied_memory_boost`, per `docs/ARCHITECTURE.md`'s planned "Retrieval result" entity.
+    `BOOST_AMOUNT = 0.05` is chosen larger than the maximum possible single-list RRF contribution
+    (`1 / (RRF_K + 1) ≈ 0.0164`), so a boosted document reliably outranks a document matched in
+    only one of dense/sparse retrieval, while staying the same order of magnitude as fusion scores
+    generally (not so large it always overrides reranking's own signal downstream).
+  - `promote_session_memory_to_long_term(conn, session_id, merge_threshold=0.95)` resolves the
+    chunk-id -> document-id gap from the context above: it reads every `session_memory` row for
+    a session with `usefulness_flag` set (skipping rows with no feedback yet), maps
+    `retrieved_chunk_ids` to their owning `document_id`s via a new
+    `memQrag.ingestion.storage.get_chunk_by_id()`, and calls `remember_query_outcome()` once per
+    row. This is the concrete place `session_memory` feeds `long_term_memory`, closing the loop
+    the session-memory decision anticipated.
+
+Consequences:
+
+- This PR implements the boost mechanism and the session -> long-term promotion path end to end,
+  each with its own tests, but does not wire `apply_memory_boost()` into an actual
+  fusion -> boost -> rerank -> confidence pipeline, and does not add `applied_memory_boost` to
+  `RerankedRetrievalResult`/`ScoredRetrievalResult`. Phase 3's dense/sparse/fusion/rerank/
+  confidence stages were likewise only stitched together in that phase's own final PR
+  (`tests/test_retrieval_pipeline.py`); Phase 4's final PR ("Add memory and staleness tests") is
+  where this same stitching, and that type-propagation question, should happen for memory.
+- `promote_session_memory_to_long_term()` is not called automatically by anything yet — no
+  orchestration layer exists (same "call functions directly until a real need arises" precedent
+  as ingestion and retrieval). The Phase 6/7 agent/API layer is the eventual caller, once session
+  feedback actually arrives over the API.
+- Phase 4 PR 4 (memory decay) reduces `decay_weight` for old, low-hit-rate memories; it is not
+  consulted by `find_similar_successful_memory()` here, since decay does not exist yet. Once it
+  does, a new decision should record whether `apply_memory_boost()`'s effective boost should scale
+  by `decay_weight`.
+- Changing `SIMILARITY_THRESHOLD`, `MERGE_THRESHOLD`, `MIN_HIT_RATE_TO_BOOST`, `BOOST_AMOUNT`, the
+  `hit_rate` formula, or the additive (vs. multiplicative) boost mechanism later requires a new
+  decision entry.
