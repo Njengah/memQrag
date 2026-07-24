@@ -8,6 +8,7 @@ import pytest
 
 from memQrag.memory.session import (
     connect,
+    get_all_session_memory,
     get_session_memory,
     record_session_query,
     set_usefulness,
@@ -93,6 +94,19 @@ def test_created_at_is_recorded(conn):
     (record,) = get_session_memory(conn, "session-1")
 
     assert record.created_at is not None
+
+
+def test_get_all_session_memory_returns_rows_from_every_session(conn):
+    record_session_query(conn, "session-1", "first query", [1])
+    record_session_query(conn, "session-2", "other session's query", [9])
+
+    records = get_all_session_memory(conn)
+
+    assert [record.query for record in records] == ["first query", "other session's query"]
+
+
+def test_get_all_session_memory_returns_empty_list_when_none_recorded(conn):
+    assert get_all_session_memory(conn) == []
 
 
 def test_connect_also_creates_shared_ingestion_tables(conn):

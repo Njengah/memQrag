@@ -104,6 +104,17 @@ def get_session_memory(conn: sqlite3.Connection, session_id: str) -> list[Sessio
     return [_row_to_record(row) for row in rows]
 
 
+def get_all_session_memory(conn: sqlite3.Connection) -> list[SessionMemoryRecord]:
+    """Return every recorded query across every session, oldest first.
+
+    Unlike `get_session_memory()`, this isn't scoped to one session — used
+    by `memQrag.memory.staleness` to count how often a document's chunks
+    were retrieved overall, regardless of which session asked for them.
+    """
+    rows = conn.execute("SELECT * FROM session_memory ORDER BY id").fetchall()
+    return [_row_to_record(row) for row in rows]
+
+
 def _row_to_record(row: sqlite3.Row) -> SessionMemoryRecord:
     usefulness_flag = row["usefulness_flag"]
     return SessionMemoryRecord(

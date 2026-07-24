@@ -1,10 +1,15 @@
-"""SQLite persistence for ingested document and chunk metadata (Phase 2 PR 4).
+"""SQLite persistence for ingested document and chunk metadata (Phase 2 PR 4
+and Phase 4 PR 5).
 
 Stores what `memQrag.ingestion.extraction` and `memQrag.ingestion.chunking`
 already produce: one row per ingested document, and one row per chunk. See
 docs/DECISIONS.md ("SQLite Persistence For Document And Chunk Metadata") for
-the schema rationale, including why `staleness_status` (Phase 4) and
-`embedding_reference` (Phase 2 PR 5) columns are deferred.
+the original schema rationale, and "Configurable Staleness Detection For
+Frequently Retrieved Documents" for why `staleness_status` lives here as a
+plain recomputed column rather than a separate table.
+`embedding_reference` (Phase 2 PR 5) is still deferred — nothing needs it
+yet, since `memQrag.ingestion.vector_store` keys Chroma vectors by
+`str(chunk_id)` directly.
 
 Functions take a plain `sqlite3.Connection` (dependency injection), so tests
 use `sqlite3.connect(":memory:")` instead of touching disk.
@@ -15,6 +20,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 from pathlib import Path
 
 from memQrag.ingestion.chunking import Chunk
@@ -29,7 +35,8 @@ CREATE TABLE IF NOT EXISTS documents (
     file_type TEXT NOT NULL,
     created_date TEXT,
     last_modified_date TEXT,
-    ingested_at TEXT NOT NULL
+    ingested_at TEXT NOT NULL,
+    staleness_status TEXT NOT NULL DEFAULT 'fresh'
 );
 
 CREATE TABLE IF NOT EXISTS chunks (
@@ -43,6 +50,15 @@ CREATE TABLE IF NOT EXISTS chunks (
 """
 
 
+class DocumentStalenessStatus(str, Enum):
+    """Per docs/ARCHITECTURE.md's planned `Document` entity `staleness
+    status` field. See `memQrag.memory.staleness` for the detection logic
+    that assigns this."""
+
+    FRESH = "fresh"
+    STALE = "stale"
+
+
 @dataclass(frozen=True)
 class DocumentRecord:
     """A `documents` row, as read back from SQLite."""
@@ -53,6 +69,7 @@ class DocumentRecord:
     created_date: datetime | None
     last_modified_date: datetime | None
     ingested_at: datetime
+    staleness_status: DocumentStalenessStatus
 
 
 @dataclass(frozen=True)
@@ -89,17 +106,26 @@ def save_document(conn: sqlite3.Connection, document: ExtractedDocument) -> int:
     """Insert or update a document row by filename; return its id.
 
     Re-ingesting an already-known filename updates that row in place rather
-    than creating a duplicate document.
+    than creating a duplicate document, and resets `staleness_status` back
+    to `FRESH` — re-ingestion means the content itself was refreshed, so
+    whatever earlier evidence flagged it stale no longer applies to what is
+    now stored.
     """
     conn.execute(
         """
-        INSERT INTO documents (filename, file_type, created_date, last_modified_date, ingested_at)
-        VALUES (:filename, :file_type, :created_date, :last_modified_date, :ingested_at)
+        INSERT INTO documents
+            (filename, file_type, created_date, last_modified_date, ingested_at,
+             staleness_status)
+        VALUES (
+            :filename, :file_type, :created_date, :last_modified_date,
+            :ingested_at, :staleness_status
+        )
         ON CONFLICT(filename) DO UPDATE SET
             file_type = excluded.file_type,
             created_date = excluded.created_date,
             last_modified_date = excluded.last_modified_date,
-            ingested_at = excluded.ingested_at
+            ingested_at = excluded.ingested_at,
+            staleness_status = excluded.staleness_status
         """,
         {
             "filename": document.source_document,
@@ -107,6 +133,7 @@ def save_document(conn: sqlite3.Connection, document: ExtractedDocument) -> int:
             "created_date": _isoformat(document.created_date),
             "last_modified_date": _isoformat(document.last_modified_date),
             "ingested_at": datetime.now(UTC).isoformat(),
+            "staleness_status": DocumentStalenessStatus.FRESH.value,
         },
     )
     conn.commit()
@@ -148,6 +175,34 @@ def get_document_by_filename(conn: sqlite3.Connection, filename: str) -> Documen
     return _row_to_document(row) if row else None
 
 
+def get_all_documents(conn: sqlite3.Connection) -> list[DocumentRecord]:
+    """Return every ingested document, in insertion order.
+
+    Used by `memQrag.memory.staleness` to sweep every document for
+    staleness; there is no filtering/pagination yet since this project
+    targets a small, demo-scale document corpus.
+    """
+    rows = conn.execute("SELECT * FROM documents ORDER BY id").fetchall()
+    return [_row_to_document(row) for row in rows]
+
+
+def update_document_staleness_status(
+    conn: sqlite3.Connection, document_id: int, staleness_status: DocumentStalenessStatus
+) -> None:
+    """Set one document's `staleness_status`.
+
+    A plain field setter, like `memQrag.memory.long_term.update_long_term_memory()`
+    — it does not decide *whether* a document is stale
+    (`memQrag.memory.staleness.detect_stale_documents()`'s job), only
+    persists the answer.
+    """
+    conn.execute(
+        "UPDATE documents SET staleness_status = ? WHERE id = ?",
+        (staleness_status.value, document_id),
+    )
+    conn.commit()
+
+
 def get_chunks_for_document(conn: sqlite3.Connection, document_id: int) -> list[ChunkRecord]:
     """Return all chunks for a document, in insertion order."""
     rows = conn.execute(
@@ -182,6 +237,7 @@ def _row_to_document(row: sqlite3.Row) -> DocumentRecord:
         created_date=_parse_datetime(row["created_date"]),
         last_modified_date=_parse_datetime(row["last_modified_date"]),
         ingested_at=datetime.fromisoformat(row["ingested_at"]),
+        staleness_status=DocumentStalenessStatus(row["staleness_status"]),
     )
 
 
