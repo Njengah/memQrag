@@ -7,6 +7,7 @@ docs/ARCHITECTURE.md:
 - memQrag.ingestion: document intake, extraction, chunking, persistence.
 - memQrag.retrieval: dense/sparse retrieval, fusion, reranking, confidence.
 - memQrag.memory: session and long-term memory, decay, staleness signals.
+- memQrag.conflicts: contradiction records, claim comparison, review state.
 - memQrag.agent: query analysis, orchestration, synthesis, citations.
 - memQrag.api: FastAPI app, schemas, endpoint handlers, dependency wiring.
 
