@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Flag conflicting factual claims in query responses.
+- [ ] Add `GET /api/conflicts` read path.
