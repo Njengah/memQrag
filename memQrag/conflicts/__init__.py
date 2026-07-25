@@ -16,7 +16,12 @@ Implemented so far (Phase 5 of docs/PRODUCT_TIMELINE.md):
   `ExtractedClaim`, `ConflictingClaimPair`), which deterministically
   extracts quantitative factual claims from retrieved chunk text, pairs
   opposing values for the same entity, and persists new conflicts without
-  picking a winner.
+  picking a winner;
+- query-response flagging in `memQrag.conflicts.flagging`
+  (`flag_conflicting_claims`, `ConflictFlaggedQueryEvidence`,
+  `ConflictWarning`), which attaches both-sided conflict warnings to the
+  final retrieved chunks for a query without filtering, re-ranking, or
+  resolving them.
 
-Response flagging and the `GET /api/conflicts` endpoint do not exist yet.
+The `GET /api/conflicts` endpoint does not exist yet.
 """

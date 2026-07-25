@@ -1623,3 +1623,49 @@ Consequences:
   patterns (or this decision must be extended) so the fixture actually triggers detection.
 - Expanding `_ENTITY_PATTERNS` / recognized units, switching to LLM-based extraction, or changing
   the idempotency key later requires a new decision entry.
+
+### Decision: Flag Conflicting Factual Claims In Query Responses
+
+Date: 2026-07-25
+
+Status: accepted.
+
+Context:
+
+- The third Phase 5 PR implements "Flag conflicting factual claims in query responses."
+  "Entity And Claim Comparison For Retrieved Chunks" deferred the response-shaping question
+  here: how detected conflicts appear on query responses without collapsing the two claims into
+  one answer.
+- `POST /api/query` does not exist yet (Phase 7). Building a full query endpoint here would bundle
+  agent orchestration into a Phase 5 tracker item. The PR-sized deliverable is the domain-level
+  response evidence shape that Phase 7 will serialize — the same "call functions directly until a
+  real orchestration need arises" precedent used for ingestion, retrieval, and memory.
+- AGENTS.md / PROJECT_BLUEPRINT require conflicting claims to be shown as conflicts, not hidden
+  inside a synthesized answer. The flagging layer must therefore carry both claims and must not
+  choose between them.
+
+Decision:
+
+- Add `memQrag/conflicts/flagging.py`:
+  - `ConflictWarning`: response-facing view of one conflict (`conflict_id`, `entity`, `claim_a`,
+    `claim_b`, both chunk-id lists, `review_status`). Exposes `involved_chunk_ids`. Never omits
+    either claim.
+  - `ConflictFlaggedQueryEvidence`: `chunks` (input order preserved as a tuple) plus
+    `conflicts` (tuple of warnings). Helpers: `conflicted_chunk_ids`, `chunk_is_conflicted`,
+    `conflicts_for_chunk` — so a future API/UI can mark which citations participate in a conflict
+    without re-deriving that set.
+  - `flag_conflicting_claims(conn, chunks)`: calls `detect_conflicts` (so new conflicts are still
+    persisted for `GET /api/conflicts` / human review), then wraps results as warnings. Does not
+    generate answer text, filter chunks, re-rank, or prefer `claim_a` over `claim_b`.
+- No HTTP endpoint in this PR — Phase 5 PR 4 owns `GET /api/conflicts`, and Phase 7 owns
+  `POST /api/query`. Both will consume these types (or serialize fields from them) rather than
+  inventing a second conflict shape.
+
+Consequences:
+
+- Phase 7's query response schema must include a conflicts / warnings array that maps from
+  `ConflictWarning` (both claims required). Answering as if one claim were definitive when
+  warnings are non-empty would violate this decision.
+- Phase 8's contradiction alert reads the same warnings (or the API's serialization of them).
+- Changing the warning field set, moving flagging under `agent`/`api`, or having flagging skip
+  persistence (detect-only without `record_conflict`) later requires a new decision entry.

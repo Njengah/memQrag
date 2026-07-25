@@ -160,8 +160,14 @@ claims (known entity patterns + numeric values with units) from chunk text witho
 `find_conflicting_claim_pairs` groups by entity and pairs distinct values from different
 chunks; `detect_conflicts` persists new pairs via `record_conflict` (idempotent for the same
 claim texts) and returns the conflicts found. Both opposing claims are stored side by side —
-detection never picks a winner. Response flagging (Phase 5 PR 3) is not wired yet. See
-"Decision: Entity And Claim Comparison For Retrieved Chunks" in `docs/DECISIONS.md`.
+detection never picks a winner. See "Decision: Entity And Claim Comparison For Retrieved
+Chunks" in `docs/DECISIONS.md`. `memQrag/conflicts/flagging.py` now wraps that detection for
+query responses: `flag_conflicting_claims(conn, chunks)` returns
+`ConflictFlaggedQueryEvidence` carrying the original chunks unchanged plus `ConflictWarning`s
+that each hold both opposing claims (and helpers to see which chunk ids are involved). It does
+not synthesize answer text or pick a winner — Phase 7's `POST /api/query` and Phase 8's
+contradiction alert will serialize/display these warnings. See "Decision: Flag Conflicting
+Factual Claims In Query Responses" in `docs/DECISIONS.md`.
 
 The planned runtime shape is:
 
