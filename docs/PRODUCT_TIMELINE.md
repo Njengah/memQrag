@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Define contradiction record model and SQLite persistence.
+- [ ] Implement entity and claim comparison path for retrieved chunks.
