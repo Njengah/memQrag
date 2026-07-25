@@ -153,9 +153,15 @@ lists — not foreign keys, since `chunks.id` rows get replaced on re-ingestion 
 `detected_at`, `review_status` as `UNREVIEWED`/`REVIEWED`) to the same shared SQLite database;
 `connect()` extends `memory.long_term.connect()`'s chain so one call still gets the full shared
 schema. `record_conflict()` / `set_review_status()` / `get_conflict_by_id()` /
-`get_all_conflicts()` are plain write/read functions; entity/claim comparison and response
-flagging do not exist yet. See "Decision: SQLite Schema For Contradiction Records" in
-`docs/DECISIONS.md`.
+`get_all_conflicts()` are plain write/read functions. See "Decision: SQLite Schema For
+Contradiction Records" in `docs/DECISIONS.md`. `memQrag/conflicts/compare.py` now implements
+entity/claim comparison over retrieved chunks: `extract_claims` pulls quantitative factual
+claims (known entity patterns + numeric values with units) from chunk text without an LLM;
+`find_conflicting_claim_pairs` groups by entity and pairs distinct values from different
+chunks; `detect_conflicts` persists new pairs via `record_conflict` (idempotent for the same
+claim texts) and returns the conflicts found. Both opposing claims are stored side by side —
+detection never picks a winner. Response flagging (Phase 5 PR 3) is not wired yet. See
+"Decision: Entity And Claim Comparison For Retrieved Chunks" in `docs/DECISIONS.md`.
 
 The planned runtime shape is:
 

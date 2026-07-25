@@ -10,8 +10,13 @@ Implemented so far (Phase 5 of docs/PRODUCT_TIMELINE.md):
   (`connect`, `record_conflict`, `set_review_status`, `get_conflict_by_id`,
   `get_all_conflicts`, `ConflictRecord`, `ConflictReviewStatus`), storing
   one conflict's entity, opposing claims, source chunk id lists, detection
-  timestamp, and review status.
+  timestamp, and review status;
+- entity/claim comparison in `memQrag.conflicts.compare`
+  (`extract_claims`, `find_conflicting_claim_pairs`, `detect_conflicts`,
+  `ExtractedClaim`, `ConflictingClaimPair`), which deterministically
+  extracts quantitative factual claims from retrieved chunk text, pairs
+  opposing values for the same entity, and persists new conflicts without
+  picking a winner.
 
-Entity/claim comparison, response flagging, and the `GET /api/conflicts`
-endpoint do not exist yet.
+Response flagging and the `GET /api/conflicts` endpoint do not exist yet.
 """
