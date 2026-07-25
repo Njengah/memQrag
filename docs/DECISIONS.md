@@ -1570,3 +1570,56 @@ Consequences:
   schema stores both claims side by side and never picks a winner.
 - Changing the `conflicts` column set, `ConflictReviewStatus` values, chunk-id storage shape, or
   moving this module under `memory` / `agent` later requires a new decision entry.
+
+### Decision: Entity And Claim Comparison For Retrieved Chunks
+
+Date: 2026-07-25
+
+Status: accepted.
+
+Context:
+
+- The second Phase 5 PR implements "entity and claim comparison path for retrieved chunks."
+  "SQLite Schema For Contradiction Records" deferred two questions here: how opposing claims are
+  extracted from retrieved chunks, and when `record_conflict()` is called.
+- AGENTS.md / PROJECT_BLUEPRINT forbid letting the LLM silently resolve (or hide) source
+  contradictions. Using an LLM to *extract* claims would also pull Phase 6's agent/LLM provider
+  choice into Phase 5 before that provider is selected, and would make detection
+  non-deterministic and hard to unit-test. The demo corpus's intentional contradictions are
+  quantitative policy facts (return windows, shipping times, warranties) — exactly the kind of
+  claim a small deterministic pattern set can catch.
+- Phase 5 PR 3 ("Flag conflicting factual claims in query responses") is a separate tracker item;
+  this PR detects and persists, but does not shape API/response payloads.
+
+Decision:
+
+- Add `memQrag/conflicts/compare.py` with a deterministic, LLM-free path:
+  - `extract_claims_from_text` / `extract_claims`: split chunk text into sentences, emit a claim
+    only when a sentence matches a known entity pattern **and** contains a numeric value with a
+    recognized unit (`days` / `hours` / `years` / `months` / `percent`). Entity labels are a
+    fixed ordered list (`return window`, `shipping time`, `warranty`); first match wins.
+    Values are normalized (`1 day` and `1 days` both become `"1 days"`) so unit inflection does
+    not hide a real agreement or invent a false conflict. Sentences with numbers but no known
+    entity are ignored — missing a conflict is preferred over inventing an unexplained entity.
+  - `find_conflicting_claim_pairs`: group claims by entity, then by normalized value; emit one
+    pair per unordered distinct-value combination whose representative claims come from
+    **different** chunk ids (same-chunk restatements are not cross-source contradictions).
+  - `detect_conflicts(conn, chunks)`: run extract -> compare -> `record_conflict` for each new
+    pair, returning the `ConflictRecord`s found in this call. Input is any `ChunkLike` protocol
+    (`chunk_id` + `text`), so `ScoredRetrievalResult` and test fakes both work without coupling
+    this module to retrieval types. Idempotent: if an existing row already stores the same
+    entity and the same two claim texts (either order), that row is returned and no duplicate
+    is inserted. Chunk id lists on the row include every chunk that asserted each value, not
+    just the first.
+- Detection never picks a winner, never filters the input chunks, and never alters retrieval
+  ranking — it only observes and records.
+
+Consequences:
+
+- Phase 5 PR 3 must decide how detected conflicts appear on query responses (likely by calling
+  `detect_conflicts` on the final top-5 and attaching the returned records), without collapsing
+  the two claims into one answer.
+- Phase 5 PR 5's intentional contradictory fixture content should use the supported entity/value
+  patterns (or this decision must be extended) so the fixture actually triggers detection.
+- Expanding `_ENTITY_PATTERNS` / recognized units, switching to LLM-based extraction, or changing
+  the idempotency key later requires a new decision entry.
