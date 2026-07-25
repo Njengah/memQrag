@@ -13,6 +13,7 @@ EXPECTED_SUBMODULES = [
     "memQrag.ingestion",
     "memQrag.retrieval",
     "memQrag.memory",
+    "memQrag.conflicts",
     "memQrag.agent",
     "memQrag.api",
 ]

@@ -1510,3 +1510,63 @@ Consequences:
 - Changing the exit-criterion assertions, bringing `applied_memory_boost` into rerank/confidence
   types, or adding a production orchestration module that wraps this sequence later requires a new
   decision entry.
+
+### Decision: SQLite Schema For Contradiction Records
+
+Date: 2026-07-25
+
+Status: accepted.
+
+Context:
+
+- The first Phase 5 PR adds the SQLite schema for contradiction / conflict records, per
+  `docs/ARCHITECTURE.md`'s planned "Conflict" entity (entity, claim A, claim B, source chunk
+  references, detection timestamp, review status) and `AGENTS.md`'s boundary that SQLite stores
+  conflict records. Entity/claim comparison (Phase 5 PR 2), response flagging (PR 3), and
+  `GET /api/conflicts` (PR 4) build on this schema; this PR is schema plus basic read/write only.
+- `AGENTS.md` lists conflict records alongside document metadata and memory in one SQLite store —
+  one database file, with each module owning its own tables. The existing connect-chain
+  (`storage` -> `session` -> `long_term`) already opens that shared file; a new module should
+  extend that chain rather than re-deriving it.
+- Module placement is not obvious: `memQrag.memory`'s documented responsibility stops at session /
+  long-term / boost / decay / staleness (no contradictions), and `memQrag.agent` is still a Phase 6
+  placeholder whose responsibility list also omits contradiction detection. Phase 5 is its own
+  tracker phase with its own API surface (`GET /api/conflicts`), so a dedicated top-level package
+  is cleaner than forcing conflicts into memory or a still-empty agent module.
+- Source chunk references face the same re-ingestion problem session memory already solved:
+  `replace_chunks()` deletes and recreates `chunks.id` rows wholesale, so a foreign key from
+  conflicts to `chunks.id` would silently break on the first re-ingestion. JSON-encoded id lists
+  match the session / long-term memory precedent.
+
+Decision:
+
+- Add a new top-level package `memQrag/conflicts/` (update `tests/test_package_structure.py` and
+  `docs/ARCHITECTURE.md`'s planned runtime shape to include it alongside ingestion / retrieval /
+  memory / agent / api).
+- Add `memQrag/conflicts/records.py` with a `conflicts` table: `id`, `entity` (`TEXT`), `claim_a`
+  / `claim_b` (`TEXT` — the two opposing factual claims), `claim_a_chunk_ids` / `claim_b_chunk_ids`
+  (`TEXT`, JSON-encoded lists of ints, not foreign keys), `detected_at` (`TEXT`, ISO 8601 UTC),
+  and `review_status` (`TEXT`, default `'unreviewed'`).
+- `ConflictReviewStatus` is a two-value enum (`UNREVIEWED` / `REVIEWED`) for the MVP — enough to
+  distinguish "needs human attention" from "a human has seen this," without inventing a fuller
+  resolution workflow (dismissed, resolved-by-doc-update, etc.) before any UI/API needs it.
+- `connect(db_path=DEFAULT_DB_PATH)` calls `memQrag.memory.long_term.connect()` (which itself
+  chains through session and ingestion storage), so one `conflicts.records.connect()` call gets
+  the full shared schema (`documents` / `chunks` / `session_memory` / `long_term_memory` /
+  `conflicts`).
+- `record_conflict(...)` inserts a row as `UNREVIEWED` and returns its id.
+  `set_review_status(conn, id, status)` updates review status (raises if the id is unknown).
+  `get_conflict_by_id()` and `get_all_conflicts()` (most recently detected first) are the read
+  paths; no review-status filter yet — Phase 5 PR 4 can add one if the API needs it.
+
+Consequences:
+
+- Phase 5 PR 2 (entity and claim comparison) must decide, and record here, how opposing claims are
+  extracted from retrieved chunks and when `record_conflict()` is called — this PR does not detect
+  anything.
+- Phase 5 PR 4 (`GET /api/conflicts`) reads via `get_all_conflicts()` (or a filtered variant); it
+  should not invent a second storage shape for conflict rows.
+- Conflicting claims must remain visible as conflicts (AGENTS.md / PROJECT_BLUEPRINT) — this
+  schema stores both claims side by side and never picks a winner.
+- Changing the `conflicts` column set, `ConflictReviewStatus` values, chunk-id storage shape, or
+  moving this module under `memory` / `agent` later requires a new decision entry.

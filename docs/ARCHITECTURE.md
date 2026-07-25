@@ -147,11 +147,22 @@ together against one shared SQLite fixture and directly asserts all three Phase 
 rerank/confidence types is deferred until Phase 6/7 orchestration needs it. See "Decision:
 End-To-End Memory And Staleness Fixture Tests" in `docs/DECISIONS.md`. This completes Phase 4.
 
+Phase 5 (Contradiction Detection) is underway. `memQrag/conflicts/records.py` adds a `conflicts`
+table (`entity`, `claim_a`, `claim_b`, `claim_a_chunk_ids` / `claim_b_chunk_ids` as JSON-encoded
+lists — not foreign keys, since `chunks.id` rows get replaced on re-ingestion —
+`detected_at`, `review_status` as `UNREVIEWED`/`REVIEWED`) to the same shared SQLite database;
+`connect()` extends `memory.long_term.connect()`'s chain so one call still gets the full shared
+schema. `record_conflict()` / `set_review_status()` / `get_conflict_by_id()` /
+`get_all_conflicts()` are plain write/read functions; entity/claim comparison and response
+flagging do not exist yet. See "Decision: SQLite Schema For Contradiction Records" in
+`docs/DECISIONS.md`.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
 - `memQrag/retrieval`: ChromaDB dense retrieval, BM25 sparse retrieval, Reciprocal Rank Fusion, cross-encoder reranking, and confidence scoring.
 - `memQrag/memory`: SQLite-backed session memory, long-term memory, memory-informed retrieval boosts, memory decay, and staleness review signals.
+- `memQrag/conflicts`: contradiction record persistence, entity/claim comparison, and review-status surfacing.
 - `memQrag/agent`: query analysis, multi-hop decomposition, comparative retrieval orchestration, response synthesis, source citation assembly, and low-confidence handling.
 - `memQrag/api`: FastAPI app, request and response schemas, endpoint handlers, and dependency wiring.
 - `ui`: React + Tailwind demo interface.
