@@ -4,10 +4,11 @@ Extracts quantitative factual claims from chunk text with a small,
 deterministic pattern set (no LLM), groups them by normalized entity, and
 persists a `conflicts` row whenever two chunks assert different values for
 the same entity. Both claims are kept side by side — this module never
-picks a winner (see AGENTS.md / PROJECT_BLUEPRINT). Response flagging
-(Phase 5 PR 3) consumes the returned `ConflictRecord`s; this module only
-detects and stores. See docs/DECISIONS.md ("Entity And Claim Comparison
-For Retrieved Chunks").
+picks a winner (see AGENTS.md / PROJECT_BLUEPRINT).
+`memQrag.conflicts.flagging.flag_conflicting_claims` consumes the returned
+`ConflictRecord`s for query-response surfacing; this module only detects
+and stores. See docs/DECISIONS.md ("Entity And Claim Comparison For
+Retrieved Chunks").
 """
 
 from __future__ import annotations
