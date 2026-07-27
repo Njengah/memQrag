@@ -149,7 +149,7 @@ Goal:
 
 Expected PRs:
 
-- [ ] Implement query classification for FACTUAL, COMPARATIVE, MULTI-HOP, and UNKNOWN.
+- [x] Implement query classification for FACTUAL, COMPARATIVE, MULTI-HOP, and UNKNOWN. (#32)
 - [ ] Implement multi-hop decomposition, per-subquery retrieval, and synthesis.
 - [ ] Implement comparative retrieval across document sets with structured comparison output.
 - [ ] Implement confidence-gated answer formatting.
