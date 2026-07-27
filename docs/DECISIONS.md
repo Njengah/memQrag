@@ -1775,3 +1775,51 @@ Consequences:
 - Expanding the fixture into checked-in `sample-data/`, adding a production orchestration wrapper
   around detect/flag, or changing the exit-criterion assertions later requires a new decision
   entry.
+
+### Decision: Query Classification Labels And Deterministic Rules
+
+Date: 2026-07-27
+
+Status: accepted.
+
+Context:
+
+- The first Phase 6 PR implements "query classification for FACTUAL, COMPARATIVE, MULTI-HOP, and
+  UNKNOWN," which is step 1 of `docs/ARCHITECTURE.md`'s retrieval flow and the routing input for
+  later Phase 6 items (multi-hop decomposition, comparative retrieval, confidence-gated answers).
+- `docs/ARCHITECTURE.md` External Integrations still says embedding/reranker/LLM providers are
+  not selected yet and must be recorded before use. Pulling an LLM into classification now would
+  force a premature provider choice and make routing non-deterministic / hard to unit-test — the
+  same reason Phase 5's claim extraction stayed LLM-free.
+- Classification alone must stay PR-sized: no decomposition, no retrieval calls, no answer
+  synthesis, and no HTTP surface (Phase 7 owns `POST /api/query`).
+
+Decision:
+
+- Add `memQrag/agent/classify.py` with:
+  - `QueryType` string enum: `factual`, `comparative`, `multi-hop`, `unknown` (labels match
+    ARCHITECTURE; `MULTI_HOP`'s value is `multi-hop`).
+  - `QueryClassification`: frozen dataclass carrying `query_type` plus `normalized_query`
+    (stripped input).
+  - `classify_query(query)`: deterministic, LLM-free classifier with priority
+    **COMPARATIVE > MULTI-HOP > FACTUAL > UNKNOWN**.
+    - **COMPARATIVE:** explicit comparison lexicon (`compare`, `versus`/`vs`, `difference
+      between`, `contrast`, `better/worse than`, `which is better`, `how ... differ`, etc.).
+    - **MULTI-HOP:** chained-lookup cues (`and then`, `after finding/knowing/...`, `based on
+      that/this/result`, `using that`, `if ... what/...`) **or** two+ interrogatives linked by
+      `and`/`then`/`;`. A single interrogative with a compound topic ("What are the return and
+      shipping policies?") stays FACTUAL, not MULTI-HOP.
+    - **FACTUAL:** clear single-hop fact seeking (leading interrogative / `tell me` / `how
+      long|many|...` / interrogative ending in `?`), after comparative/multi-hop miss.
+    - **UNKNOWN:** empty/whitespace, greeting/noise short-circuits, or no matching cue.
+- No orchestration wrapper yet — later Phase 6 PRs call `classify_query` and branch. No LLM
+  provider decision in this PR.
+
+Consequences:
+
+- Phase 6 PR 2 (multi-hop decomposition) and PR 3 (comparative retrieval) must consume
+  `QueryType.MULTI_HOP` / `QueryType.COMPARATIVE` respectively; FACTUAL uses the existing hybrid
+  retrieval path; UNKNOWN should eventually produce an explicit clarification / low-confidence
+  style response (owned by confidence-gated formatting / orchestration tests later).
+- Switching classification to an LLM (or changing label set / priority / pattern vocabulary)
+  later requires a new decision entry — and an accepted LLM provider decision first.
