@@ -1669,3 +1669,50 @@ Consequences:
 - Phase 8's contradiction alert reads the same warnings (or the API's serialization of them).
 - Changing the warning field set, moving flagging under `agent`/`api`, or having flagging skip
   persistence (detect-only without `record_conflict`) later requires a new decision entry.
+
+### Decision: GET /api/conflicts Read Path
+
+Date: 2026-07-27
+
+Status: accepted.
+
+Context:
+
+- The fourth Phase 5 PR adds `GET /api/conflicts`, per `docs/ARCHITECTURE.md`'s API boundary and
+  Phase 5's exit criterion "Stored conflicts can be listed for human review." Earlier Phase 5 PRs
+  already persist conflicts (`records`) and shape query-time warnings (`flagging`); this PR is the
+  HTTP list surface.
+- Most other business endpoints wait for Phase 7, but shipping conflicts listing now unblocks
+  human-review / demo inspection before query orchestration exists — and `docs/PRODUCT_TIMELINE.md`
+  places this item in Phase 5, not Phase 7.
+- AGENTS.md / PROJECT_BLUEPRINT require both opposing claims to remain visible; the API must not
+  collapse them into one resolved statement.
+- No shared FastAPI DB dependency existed yet (`/health` needs none). A small `deps.get_db` that
+  opens `conflicts.records.connect()` keeps route handlers free of connect/close boilerplate and
+  is overrideable in tests (same FastAPI dependency-override pattern as the health test harness).
+
+Decision:
+
+- Add `memQrag/api/deps.py` with `get_db()` yielding a connection from
+  `memQrag.conflicts.records.connect()` (full shared schema) and closing it after the request.
+- Add `memQrag/api/conflicts.py` with `GET /api/conflicts` under an `/api`-prefixed router
+  (business path, unlike unprefixed `/health`):
+  - Response models `ConflictResponse` / `ConflictListResponse` (Pydantic) mirror
+    `ConflictRecord` field-for-field, including both `claim_a` and `claim_b` and both chunk-id
+    lists. `review_status` serializes as the existing `ConflictReviewStatus` string enum.
+  - Handler calls `get_all_conflicts(conn)` and returns most-recently-detected-first order
+    unchanged — no review-status filter yet (none was required by the tracker item; add later if
+    the UI needs it).
+- Wire the router in `memQrag.api.app.create_app` alongside the health router.
+- Tests in `tests/test_api_conflicts.py` override `get_db` with a per-test temp SQLite file so
+  they never touch `data/memqrag.db` and never share state.
+
+Consequences:
+
+- Phase 5's "stored conflicts can be listed for human review" exit criterion is met by this
+  endpoint; the remaining Phase 5 item is intentional contradictory fixture tests.
+- Phase 7 should not invent a second conflicts list shape — reuse these response models (or
+  fields) if `/api/query` also embeds conflicts.
+- Phase 8's contradiction review UI reads this endpoint (or an equivalent serialization).
+- Adding review-status query filters, pagination, or mutating endpoints (`PATCH` review status)
+  later requires a new decision entry.

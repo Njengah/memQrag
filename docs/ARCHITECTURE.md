@@ -167,7 +167,11 @@ query responses: `flag_conflicting_claims(conn, chunks)` returns
 that each hold both opposing claims (and helpers to see which chunk ids are involved). It does
 not synthesize answer text or pick a winner — Phase 7's `POST /api/query` and Phase 8's
 contradiction alert will serialize/display these warnings. See "Decision: Flag Conflicting
-Factual Claims In Query Responses" in `docs/DECISIONS.md`.
+Factual Claims In Query Responses" in `docs/DECISIONS.md`. `GET /api/conflicts` is now
+implemented in `memQrag/api/conflicts.py` (wired through `memQrag.api.app.create_app`, with DB
+access via `memQrag.api.deps.get_db` → `conflicts.records.connect()`): it lists every stored
+conflict with both opposing claims, most recently detected first. See "Decision: GET
+/api/conflicts Read Path" in `docs/DECISIONS.md`.
 
 The planned runtime shape is:
 
@@ -218,6 +222,8 @@ Implemented today:
 
 - `GET /health`: unprefixed infrastructure liveness probe. Not a business endpoint; see
   "Decision: Unprefixed `/health` Infrastructure Endpoint" in `docs/DECISIONS.md`.
+- `GET /api/conflicts`: list stored contradiction records for human review (both claims always
+  present). See "Decision: GET /api/conflicts Read Path" in `docs/DECISIONS.md`.
 
 Planned business endpoints (Phase 7):
 
@@ -226,7 +232,6 @@ Planned business endpoints (Phase 7):
 - `GET /api/memory/session`: view current session memory.
 - `GET /api/memory/longterm`: view persistent memory store.
 - `GET /api/documents`: list ingested documents with staleness flags.
-- `GET /api/conflicts`: list detected document contradictions.
 
 ## UI Boundary
 

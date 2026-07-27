@@ -23,5 +23,6 @@ Implemented so far (Phase 5 of docs/PRODUCT_TIMELINE.md):
   final retrieved chunks for a query without filtering, re-ranking, or
   resolving them.
 
-The `GET /api/conflicts` endpoint does not exist yet.
+`GET /api/conflicts` (Phase 5 PR 4) lists stored conflicts via
+`memQrag.api.conflicts`; remaining business endpoints land in Phase 7.
 """
