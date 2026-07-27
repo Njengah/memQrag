@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add tests for intentional contradictory fixture content.
+- [ ] Implement query classification for FACTUAL, COMPARATIVE, MULTI-HOP, and UNKNOWN.
