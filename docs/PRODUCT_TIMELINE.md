@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Implement query classification for FACTUAL, COMPARATIVE, MULTI-HOP, and UNKNOWN.
+- [ ] Implement multi-hop decomposition, per-subquery retrieval, and synthesis.
