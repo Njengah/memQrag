@@ -134,7 +134,7 @@ Expected PRs:
 - [x] Implement entity and claim comparison path for retrieved chunks. (#28)
 - [x] Flag conflicting factual claims in query responses. (#29)
 - [x] Add `GET /api/conflicts` read path. (#30)
-- [ ] Add tests for intentional contradictory fixture content.
+- [x] Add tests for intentional contradictory fixture content. (#31)
 
 Exit criteria:
 
