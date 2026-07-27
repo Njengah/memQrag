@@ -1716,3 +1716,62 @@ Consequences:
 - Phase 8's contradiction review UI reads this endpoint (or an equivalent serialization).
 - Adding review-status query filters, pagination, or mutating endpoints (`PATCH` review status)
   later requires a new decision entry.
+
+### Decision: Intentional Contradictory Fixture Content Tests
+
+Date: 2026-07-27
+
+Status: accepted.
+
+Context:
+
+- The fifth and final Phase 5 PR is "Add tests for intentional contradictory fixture content,"
+  closing Phase 5's two exit criteria in `docs/PRODUCT_TIMELINE.md`: contradictory retrieved
+  chunks are visible in API responses; stored conflicts can be listed for human review.
+- Every Phase 5 module (`records`, `compare`, `flagging`) and `GET /api/conflicts` already has
+  focused unit/API tests, but none exercises them composed together against one intentional
+  multi-document policy corpus — the same gap the final Phase 3/4 PRs closed with
+  `tests/test_retrieval_pipeline.py` and `tests/test_memory_pipeline.py`.
+- "Entity And Claim Comparison For Retrieved Chunks" required this PR's fixture content to use
+  the supported entity/value patterns (`return window`, `shipping time`, `warranty` + numeric
+  units) so detection actually fires. Phase 8 owns checked-in `sample-data/` demo policies; this
+  PR must stay test-only and must not invent a parallel demo corpus directory.
+- `POST /api/query` does not exist yet. "Visible in API responses" therefore means the
+  response-shaped `ConflictFlaggedQueryEvidence` / `ConflictWarning` types Phase 7 will
+  serialize, plus a smoke check that rows written from the fixture are readable via the existing
+  `GET /api/conflicts` list path.
+
+Decision:
+
+- Add `tests/test_conflicts_pipeline.py` with a small fictional six-document corpus that
+  intentionally contradicts once per supported entity (30 vs 14 day returns, 2 vs 5 day shipping,
+  1 vs 2 year warranty), plus an agreeing return peer and a non-claim filler used only in the
+  false-positive check. Corpus text lives in the test module (not `sample-data/`).
+- Chunks are built as `ScoredRetrievalResult` instances so the composition path proves
+  `ChunkLike` works with real retrieval result types, not only test fakes.
+- Assert each Phase 5 exit criterion (and the supported-entity coverage consequence) as its own
+  test function:
+  - **Query-response visibility:** `flag_conflicting_claims` returns three warnings, each with
+    both opposing claims, non-overlapping chunk-id sides, and every corpus chunk marked
+    conflicted — chunks themselves are preserved unchanged.
+  - **Human-review listing:** after flagging, `get_all_conflicts` returns three
+    `UNREVIEWED` rows covering exactly the three supported entities.
+  - **Entity coverage:** one warning per entity, with the expected opposing numeric phrases
+    present in the claim texts.
+  - **No false positives:** agreeing return peers + filler yield empty warnings and an empty
+    stored list.
+  - **HTTP list smoke:** seed the same fixture into a per-test SQLite file under
+    `data/test-dbs/`, override `get_db`, and assert `GET /api/conflicts` returns both claims for
+    all three entities (same Windows-safe temp-DB pattern as `tests/test_api_conflicts.py`).
+- No production code changes in this PR — composition is proven by calling existing functions
+  directly, matching the Phase 2/3/4 final-PR precedent.
+
+Consequences:
+
+- This completes Phase 5's exit criteria and its tracker. Phase 6 (Agentic Query Orchestration)
+  starts next.
+- Phase 8's intentional demo contradictions should reuse these entity/value phrasings (or extend
+  `compare.py`'s patterns via a new decision) so the walkthrough actually triggers detection.
+- Expanding the fixture into checked-in `sample-data/`, adding a production orchestration wrapper
+  around detect/flag, or changing the exit-criterion assertions later requires a new decision
+  entry.

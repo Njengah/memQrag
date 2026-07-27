@@ -24,5 +24,8 @@ Implemented so far (Phase 5 of docs/PRODUCT_TIMELINE.md):
   resolving them.
 
 `GET /api/conflicts` (Phase 5 PR 4) lists stored conflicts via
-`memQrag.api.conflicts`; remaining business endpoints land in Phase 7.
+`memQrag.api.conflicts`. Phase 5 PR 5 (`tests/test_conflicts_pipeline.py`)
+closes the phase with intentional contradictory fixture tests over the
+full detect -> flag -> list path. Remaining business endpoints land in
+Phase 7.
 """
