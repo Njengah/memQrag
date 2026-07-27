@@ -180,6 +180,14 @@ warnings on query evidence; stored conflicts listable for human review, includin
 "Decision: Intentional Contradictory Fixture Content Tests" in `docs/DECISIONS.md`. This
 completes Phase 5.
 
+Phase 6 (Agentic Query Orchestration) is underway. `memQrag/agent/classify.py` implements
+retrieval-flow step 1: `classify_query` returns a `QueryClassification` with a `QueryType` of
+`factual`, `comparative`, `multi-hop`, or `unknown`. Matching is deterministic and LLM-free
+(COMPARATIVE > MULTI-HOP > FACTUAL > UNKNOWN priority) because no LLM provider is selected yet.
+Later Phase 6 PRs branch on this label for decomposition, comparative retrieval, and
+confidence-gated answers. See "Decision: Query Classification Labels And Deterministic Rules"
+in `docs/DECISIONS.md`.
+
 The planned runtime shape is:
 
 - `memQrag/ingestion`: document intake, text extraction, semantic chunking, chunk metadata assembly, and persistence coordination.
