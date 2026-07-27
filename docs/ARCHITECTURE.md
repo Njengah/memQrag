@@ -171,7 +171,14 @@ Factual Claims In Query Responses" in `docs/DECISIONS.md`. `GET /api/conflicts` 
 implemented in `memQrag/api/conflicts.py` (wired through `memQrag.api.app.create_app`, with DB
 access via `memQrag.api.deps.get_db` → `conflicts.records.connect()`): it lists every stored
 conflict with both opposing claims, most recently detected first. See "Decision: GET
-/api/conflicts Read Path" in `docs/DECISIONS.md`.
+/api/conflicts Read Path" in `docs/DECISIONS.md`. `tests/test_conflicts_pipeline.py` now
+stitches detect -> flag -> list against one intentional fictional multi-document policy corpus
+(one contradiction per supported entity pattern: return window, shipping time, warranty) built
+as `ScoredRetrievalResult` chunks, and directly asserts both Phase 5 exit criteria (both-sided
+warnings on query evidence; stored conflicts listable for human review, including via
+`GET /api/conflicts`). Agreeing peers and non-claim filler must not invent false conflicts. See
+"Decision: Intentional Contradictory Fixture Content Tests" in `docs/DECISIONS.md`. This
+completes Phase 5.
 
 The planned runtime shape is:
 
