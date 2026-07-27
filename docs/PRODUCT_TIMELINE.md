@@ -133,7 +133,7 @@ Expected PRs:
 - [x] Define contradiction record model and SQLite persistence. (#27)
 - [x] Implement entity and claim comparison path for retrieved chunks. (#28)
 - [x] Flag conflicting factual claims in query responses. (#29)
-- [ ] Add `GET /api/conflicts` read path.
+- [x] Add `GET /api/conflicts` read path. (#30)
 - [ ] Add tests for intentional contradictory fixture content.
 
 Exit criteria:
@@ -248,4 +248,4 @@ Exit criteria:
 
 The next unchecked item is:
 
-- [ ] Add `GET /api/conflicts` read path.
+- [ ] Add tests for intentional contradictory fixture content.
